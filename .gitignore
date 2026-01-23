@@ -9,5 +9,6 @@ web/dist/
 web/node_modules/
 packages/*/node_modules/
 packages/*/dist/
+data/customers/*.json
 web/vite.config.d.ts
 web/vite.config.js

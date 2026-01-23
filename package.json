@@ -1,0 +1,10 @@
+{
+  "name": "claudoist",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix web run build",
+    "dev": "npm --prefix web run dev",
+    "lint": "npm --prefix web run lint",
+    "test": "npm --prefix packages/core run test && npm --prefix packages/cli run test && npm --prefix web run test"
+  }
+}

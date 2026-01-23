@@ -1,0 +1,21 @@
+{
+  "name": "@claudoist/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "claudoist": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@claudoist/core": "file:../core",
+    "commander": "^12.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.1"
+  }
+}

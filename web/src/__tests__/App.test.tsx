@@ -2,8 +2,8 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { vi } from "vitest";
 import App from "../App";
 
-const mockFetch = (url: string) => {
-  if (url.endsWith("/api/customers")) {
+const mockFetch = (url: string, options?: RequestInit) => {
+  if (url.endsWith("/api/customers") && (!options || options.method === "GET")) {
     return Promise.resolve({
       ok: true,
       json: () =>
@@ -16,6 +16,19 @@ const mockFetch = (url: string) => {
             lastCallAt: "2024-10-01T10:00:00Z"
           }
         ])
+    });
+  }
+  if (url.endsWith("/api/customers/acme-co") && (!options || options.method === "GET")) {
+    return Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          customerId: "acme-co",
+          customerName: "Acme Co",
+          updatedAt: "2024-10-01T10:00:00Z",
+          todos: [],
+          callDocs: []
+        })
     });
   }
   if (url.includes("/agenda")) {

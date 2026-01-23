@@ -5,6 +5,15 @@
 - `claudoist note --customer acme-co --text "..."`
 - Generates a note entry in the customer's JSON file
 
+## Create a customer
+
+- `claudoist customer create --id acme-co --name "Acme Co"`
+
+## Manage todos
+
+- `claudoist todo add --customer acme-co --title "Send recap" --details "Email summary"`
+- `claudoist todo status --customer acme-co --todo <todo-id> --status done`
+
 ## UI + API server
 
 - `claudoist serve --data-dir data`

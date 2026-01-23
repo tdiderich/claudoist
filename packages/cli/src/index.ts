@@ -2,10 +2,11 @@
 import { Command } from "commander";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { FileStorageAdapter, type CallDoc, type CallNote } from "@claudoist/core";
+import { FileStorageAdapter, createEmptyCustomer, type CallDoc, type CallNote } from "@claudoist/core";
 import { runCallPlanner } from "./agentRuntime.js";
 import { generateId, parseTags } from "./parse.js";
 import { createServer } from "./server.js";
+import { createTodo } from "./todo.js";
 
 const program = new Command();
 
@@ -131,6 +132,65 @@ program
     const output = runCallPlanner({ customerId: input.customerId, agendaTitle: input.agendaTitle }, notes);
 
     console.log(JSON.stringify(output, null, 2));
+  });
+
+program
+  .command("customer")
+  .description("Manage customers")
+  .command("create")
+  .requiredOption("--id <id>", "Customer ID")
+  .requiredOption("--name <name>", "Customer name")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const adapter = new FileStorageAdapter(resolveDataDir(options.dataDir));
+    const existing = await adapter.loadCustomer(options.id);
+    if (existing) {
+      console.log(`Customer ${options.id} already exists`);
+      return;
+    }
+    const now = new Date().toISOString();
+    const customer = createEmptyCustomer(options.id, options.name, now);
+    await adapter.saveCustomer(customer);
+    console.log(`Created customer ${options.id}`);
+  });
+
+program
+  .command("todo")
+  .description("Manage todos")
+  .command("add")
+  .requiredOption("--customer <id>", "Customer ID")
+  .requiredOption("--title <title>", "Todo title")
+  .option("--details <details>", "Todo details")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const adapter = new FileStorageAdapter(resolveDataDir(options.dataDir));
+    const todo = createTodo(options.title, options.details ?? null);
+    await adapter.addTodos(options.customer, [todo]);
+    console.log(`Added todo ${todo.id}`);
+  });
+
+program
+  .command("todo")
+  .description("Manage todos")
+  .command("status")
+  .requiredOption("--customer <id>", "Customer ID")
+  .requiredOption("--todo <id>", "Todo ID")
+  .requiredOption("--status <status>", "Todo status")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const adapter = new FileStorageAdapter(resolveDataDir(options.dataDir));
+    const customer = await adapter.loadCustomer(options.customer);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+    const todo = customer.todos.find((item) => item.id === options.todo);
+    if (!todo) {
+      throw new Error("Todo not found");
+    }
+    todo.status = options.status;
+    todo.updatedAt = new Date().toISOString();
+    await adapter.saveCustomer(customer);
+    console.log(`Updated todo ${todo.id} to ${todo.status}`);
   });
 
 program

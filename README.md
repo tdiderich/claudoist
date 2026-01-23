@@ -25,6 +25,11 @@ npm run build
 node dist/index.js serve --data-dir ../data
 ```
 
+## Create a customer
+```bash
+node packages/cli/dist/index.js customer create --id acme-co --name "Acme Co"
+```
+
 ## Project layout
 - `web/` - Vite + React + Chakra UI client
 - `packages/core/` - data models + storage adapters

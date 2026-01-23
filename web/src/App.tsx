@@ -7,6 +7,7 @@ import {
   Flex,
   Heading,
   HStack,
+  Input,
   SimpleGrid,
   Stack,
   Text
@@ -46,12 +47,35 @@ const fetchJson = async <T,>(url: string, options?: RequestInit): Promise<T> => 
   return (await response.json()) as T;
 };
 
+type CustomerDetail = {
+  customerId: string;
+  customerName: string;
+  updatedAt: string;
+  todos: Array<{
+    id: string;
+    status: "open" | "in_progress" | "done" | "blocked";
+    title: string;
+    details?: string | null;
+  }>;
+  callDocs: Array<{
+    id: string;
+    title: string;
+    markdown?: string | null;
+    emailDraft?: string | null;
+  }>;
+};
+
 const App = () => {
   const [customers, setCustomers] = useState<CustomerListItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedDetail, setSelectedDetail] = useState<CustomerDetail | null>(null);
   const [markdown, setMarkdown] = useState<string>("Select a customer to view notes.");
   const [loading, setLoading] = useState(true);
   const [agendaLoading, setAgendaLoading] = useState(false);
+  const [formId, setFormId] = useState("");
+  const [formName, setFormName] = useState("");
+  const [todoTitle, setTodoTitle] = useState("");
+  const [todoDetails, setTodoDetails] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +109,22 @@ const App = () => {
   const selected = customers.find((customer) => customer.id === selectedId) ?? null;
   const grouped = useMemo(() => groupByStatus(customers), [customers]);
 
+  useEffect(() => {
+    const loadDetail = async () => {
+      if (!selectedId) {
+        setSelectedDetail(null);
+        return;
+      }
+      try {
+        const detail = await fetchJson<CustomerDetail>(`${apiBase}/api/customers/${selectedId}`);
+        setSelectedDetail(detail);
+      } catch (err) {
+        setError((err as Error).message);
+      }
+    };
+    loadDetail();
+  }, [selectedId]);
+
   const handleMakeAgenda = async () => {
     if (!selected) {
       return;
@@ -97,10 +137,81 @@ const App = () => {
         body: JSON.stringify({ recent: 3 })
       });
       setMarkdown(agenda.markdown);
+      const detail = await fetchJson<CustomerDetail>(`${apiBase}/api/customers/${selected.id}`);
+      setSelectedDetail(detail);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setAgendaLoading(false);
+    }
+  };
+
+  const handleCreateCustomer = async () => {
+    if (!formId || !formName) {
+      setError("Customer ID and name are required.");
+      return;
+    }
+    try {
+      const created = await fetchJson<CustomerDetail>(`${apiBase}/api/customers`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId: formId, customerName: formName })
+      });
+      setCustomers((prev) => [
+        ...prev,
+        {
+          id: created.customerId,
+          name: created.customerName,
+          account: "Account",
+          status: "open",
+          nextCall: "No recent calls",
+          notes: []
+        }
+      ]);
+      setSelectedId(created.customerId);
+      setFormId("");
+      setFormName("");
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleAddTodo = async () => {
+    if (!selected || !todoTitle) {
+      setError("Select a customer and enter a todo title.");
+      return;
+    }
+    try {
+      await fetchJson(`${apiBase}/api/customers/${selected.id}/todos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: todoTitle, details: todoDetails || null })
+      });
+      const detail = await fetchJson<CustomerDetail>(`${apiBase}/api/customers/${selected.id}`);
+      setSelectedDetail(detail);
+      setTodoTitle("");
+      setTodoDetails("");
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  const handleTodoStatus = async (todoId: string, status: CustomerDetail["todos"][number]["status"]) => {
+    if (!selected) {
+      return;
+    }
+    try {
+      await fetchJson(`${apiBase}/api/customers/${selected.id}/todos/${todoId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status })
+      });
+      const detail = await fetchJson<CustomerDetail>(`${apiBase}/api/customers/${selected.id}`);
+      setSelectedDetail(detail);
+    } catch (err) {
+      setError((err as Error).message);
     }
   };
 
@@ -161,6 +272,16 @@ const App = () => {
           <Stack spacing={3}>
             {loading && <Text color="slate.500">Loading customers...</Text>}
             {!loading && customers.length === 0 && <Text color="slate.500">No customers found.</Text>}
+            <Box bg="white" borderRadius="16px" p={4} border="1px solid" borderColor="slate.200">
+              <Stack spacing={3}>
+                <Text fontWeight={600}>Add customer</Text>
+                <Input placeholder="Customer ID (acme-co)" value={formId} onChange={(event) => setFormId(event.target.value)} />
+                <Input placeholder="Customer name" value={formName} onChange={(event) => setFormName(event.target.value)} />
+                <Button bg="slate.800" color="white" _hover={{ bg: "slate.700" }} onClick={handleCreateCustomer}>
+                  Create customer
+                </Button>
+              </Stack>
+            </Box>
             {customers.map((customer) => (
               <Flex
                 key={customer.id}
@@ -237,6 +358,64 @@ const App = () => {
                 Make agenda
               </Button>
             </Flex>
+            <Stack spacing={4} bg="white" borderRadius="20px" p={{ base: 4, md: 6 }} boxShadow="0 18px 40px rgba(11, 28, 28, 0.08)">
+              <Heading fontSize="xl">Todos</Heading>
+              <Stack spacing={3}>
+                {selectedDetail?.todos?.length ? (
+                  selectedDetail.todos.map((todo) => (
+                    <Box key={todo.id} p={3} borderRadius="14px" bg="slate.50">
+                      <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} direction={{ base: "column", md: "row" }} gap={2}>
+                        <Stack spacing={1}>
+                          <Text fontWeight={600}>{todo.title}</Text>
+                          {todo.details && <Text color="slate.600">{todo.details}</Text>}
+                        </Stack>
+                        <HStack spacing={2}>
+                          {(["open", "in_progress", "done", "blocked"] as const).map((status) => (
+                            <Button
+                              key={status}
+                              size="xs"
+                              variant={todo.status === status ? "solid" : "outline"}
+                              colorScheme={todo.status === status ? "orange" : "gray"}
+                              onClick={() => handleTodoStatus(todo.id, status)}
+                            >
+                              {status.replace("_", " ")}
+                            </Button>
+                          ))}
+                        </HStack>
+                      </Flex>
+                    </Box>
+                  ))
+                ) : (
+                  <Text color="slate.500">No todos yet.</Text>
+                )}
+              </Stack>
+              <Divider borderColor="slate.200" />
+              <Stack spacing={3}>
+                <Text fontWeight={600}>Add todo</Text>
+                <Input placeholder="Todo title" value={todoTitle} onChange={(event) => setTodoTitle(event.target.value)} />
+                <Input placeholder="Details (optional)" value={todoDetails} onChange={(event) => setTodoDetails(event.target.value)} />
+                <Button bg="slate.800" color="white" _hover={{ bg: "slate.700" }} onClick={handleAddTodo}>
+                  Add todo
+                </Button>
+              </Stack>
+            </Stack>
+            <Stack spacing={4} bg="white" borderRadius="20px" p={{ base: 4, md: 6 }} boxShadow="0 18px 40px rgba(11, 28, 28, 0.08)">
+              <Heading fontSize="xl">Agendas</Heading>
+              <Stack spacing={3}>
+                {selectedDetail?.callDocs?.length ? (
+                  selectedDetail.callDocs.map((doc) => (
+                    <Flex key={doc.id} justify="space-between" align="center" gap={3}>
+                      <Text fontWeight={600}>{doc.title}</Text>
+                      <Button size="sm" onClick={() => setMarkdown(doc.markdown ?? "")}>
+                        View
+                      </Button>
+                    </Flex>
+                  ))
+                ) : (
+                  <Text color="slate.500">No agendas yet.</Text>
+                )}
+              </Stack>
+            </Stack>
             <Box bg="white" borderRadius="20px" p={{ base: 4, md: 6 }} boxShadow="0 18px 40px rgba(11, 28, 28, 0.08)">
               <ReactMarkdown>{markdown}</ReactMarkdown>
             </Box>

@@ -14,6 +14,12 @@
 - `claudoist todo add --customer acme-co --title "Send recap" --details "Email summary"`
 - `claudoist todo status --customer acme-co --todo <todo-id> --status done`
 
+## Agent context + ingest
+
+- `claudoist context --customer acme-co --recent 5`
+- Run your preferred agent CLI using the generated prompt file
+- `claudoist ingest --customer acme-co --input <agent-output.json>`
+
 ## UI + API server
 
 - `claudoist serve --data-dir data`

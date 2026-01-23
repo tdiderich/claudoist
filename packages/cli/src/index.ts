@@ -2,11 +2,14 @@
 import { Command } from "commander";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { FileStorageAdapter, createEmptyCustomer, type CallDoc, type CallNote } from "@claudoist/core";
+import { FileStorageAdapter, createEmptyCustomer, type CallDoc, type CallNote, type TodoItem } from "@claudoist/core";
 import { runCallPlanner } from "./agentRuntime.js";
 import { generateId, parseTags } from "./parse.js";
 import { createServer } from "./server.js";
 import { createTodo } from "./todo.js";
+import { agentOutputSchema } from "./agentOutput.js";
+import { addTodos } from "./api.js";
+import { buildContextBundle, buildPrompt, writeContextFiles } from "./agentContext.js";
 
 const program = new Command();
 
@@ -45,7 +48,8 @@ program
       throw new Error("Note text is required via --text or stdin");
     }
 
-    const adapter = new FileStorageAdapter(resolveDataDir(options.dataDir));
+    const dataDir = resolveDataDir(options.dataDir);
+    const adapter = new FileStorageAdapter(dataDir);
     const now = new Date().toISOString();
     const note: CallNote = {
       id: generateId("note"),
@@ -69,7 +73,8 @@ program
   .option("--output <path>", "Write markdown output to file")
   .option("--data-dir <path>", "Data directory")
   .action(async (options) => {
-    const adapter = new FileStorageAdapter(resolveDataDir(options.dataDir));
+    const dataDir = resolveDataDir(options.dataDir);
+    const adapter = new FileStorageAdapter(dataDir);
     const count = Number.parseInt(options.recent, 10);
     const notes = await adapter.getRecentNotes(options.customer, count);
 
@@ -152,6 +157,74 @@ program
     const customer = createEmptyCustomer(options.id, options.name, now);
     await adapter.saveCustomer(customer);
     console.log(`Created customer ${options.id}`);
+  });
+
+program
+  .command("context")
+  .description("Generate an agent context bundle and prompt")
+  .requiredOption("--customer <id>", "Customer ID")
+  .option("--recent <count>", "Number of recent notes", "5")
+  .option("--docs <count>", "Number of recent call docs", "3")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const dataDir = resolveDataDir(options.dataDir);
+    const adapter = new FileStorageAdapter(dataDir);
+    const customer = await adapter.loadCustomer(options.customer);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+    const recentNotes = await adapter.getRecentNotes(options.customer, Number.parseInt(options.recent, 10));
+    const recentDocs = customer.callDocs.slice(-Number.parseInt(options.docs, 10));
+    const bundle = buildContextBundle(customer, recentNotes, recentDocs);
+    const prompt = buildPrompt(bundle);
+    const { contextPath, promptPath } = await writeContextFiles(dataDir, options.customer, bundle, prompt);
+    console.log(`Context: ${contextPath}`);
+    console.log(`Prompt: ${promptPath}`);
+  });
+
+program
+  .command("ingest")
+  .description("Ingest agent JSON output into customer data")
+  .requiredOption("--customer <id>", "Customer ID")
+  .option("--input <path>", "Path to agent output JSON (or stdin)")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const raw = options.input ? await fs.readFile(options.input, "utf8") : await readStdin();
+    if (!raw) {
+      throw new Error("Agent output JSON is required via --input or stdin");
+    }
+    const parsed = agentOutputSchema.parse(JSON.parse(raw));
+    if (!parsed.callDoc && (!parsed.todos || parsed.todos.length === 0)) {
+      throw new Error("Agent output must include callDoc or todos");
+    }
+    const dataDir = resolveDataDir(options.dataDir);
+    const adapter = new FileStorageAdapter(dataDir);
+    const customer = await adapter.loadCustomer(options.customer);
+    if (!customer) {
+      throw new Error("Customer not found");
+    }
+
+    if (parsed.todos && parsed.todos.length > 0) {
+      const todos: TodoItem[] = parsed.todos.map((todo) => createTodo(todo.title, todo.details ?? null));
+      await addTodos(dataDir, options.customer, todos);
+    }
+
+    if (parsed.callDoc) {
+      const now = new Date().toISOString();
+      const doc: CallDoc = {
+        id: generateId("call-doc"),
+        callId: null,
+        title: parsed.callDoc.title,
+        createdAt: now,
+        updatedAt: now,
+        markdown: parsed.callDoc.markdown,
+        emailDraft: parsed.callDoc.emailDraft,
+        markdownPath: null
+      };
+      await adapter.addCallDoc(options.customer, doc);
+    }
+
+    console.log("Ingest complete");
   });
 
 program

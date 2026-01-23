@@ -77,6 +77,12 @@ export const addTodo = async (dataDir: string, customerId: string, input: TodoIn
   return todo;
 };
 
+export const addTodos = async (dataDir: string, customerId: string, todos: TodoItem[]): Promise<TodoItem[]> => {
+  const adapter = new FileStorageAdapter(dataDir);
+  await adapter.addTodos(customerId, todos);
+  return todos;
+};
+
 export const updateTodoStatus = async (
   dataDir: string,
   customerId: string,

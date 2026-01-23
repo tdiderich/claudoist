@@ -30,6 +30,13 @@ node dist/index.js serve --data-dir ../data
 node packages/cli/dist/index.js customer create --id acme-co --name "Acme Co"
 ```
 
+## Agent context + ingest
+```bash
+node packages/cli/dist/index.js context --customer acme-co --recent 5
+# Run your agent CLI with the generated prompt
+node packages/cli/dist/index.js ingest --customer acme-co --input agent-output.json
+```
+
 ## Project layout
 - `web/` - Vite + React + Chakra UI client
 - `packages/core/` - data models + storage adapters

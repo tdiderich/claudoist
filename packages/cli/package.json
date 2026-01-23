@@ -6,8 +6,8 @@
     "claudoist": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "test": "npm --prefix ../core run build && vitest run"
+    "build": "npm --prefix ../core install && npm --prefix ../core run build && tsc -p tsconfig.json",
+    "test": "npm --prefix ../core install && npm --prefix ../core run build && vitest run"
   },
   "dependencies": {
     "@claudoist/core": "file:../core",

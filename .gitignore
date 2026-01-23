@@ -8,5 +8,6 @@ coverage/
 web/dist/
 web/node_modules/
 packages/*/node_modules/
+packages/*/dist/
 web/vite.config.d.ts
 web/vite.config.js

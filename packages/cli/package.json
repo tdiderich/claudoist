@@ -7,7 +7,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "npm --prefix ../core run build && vitest run"
   },
   "dependencies": {
     "@claudoist/core": "file:../core",
@@ -15,6 +15,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/node": "^22.10.7",
     "typescript": "^5.5.4",
     "vitest": "^2.1.1"
   }

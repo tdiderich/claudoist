@@ -17,6 +17,14 @@ npm install
 npm run dev
 ```
 
+## Quick start (API)
+```bash
+cd packages/cli
+npm install
+npm run build
+node dist/index.js serve --data-dir ../data
+```
+
 ## Project layout
 - `web/` - Vite + React + Chakra UI client
 - `packages/core/` - data models + storage adapters

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Box,
@@ -12,41 +12,97 @@ import {
   Text
 } from "@chakra-ui/react";
 import ReactMarkdown from "react-markdown";
-import { sampleCustomers, sampleMarkdown, type CustomerSummary } from "./data/sample";
+import type { CustomerSummary as CustomerListItem } from "./data/sample";
 
-const statusLabels: Record<CustomerSummary["status"], string> = {
+const statusLabels: Record<CustomerListItem["status"], string> = {
   open: "Open",
   in_progress: "Active",
   done: "Done"
 };
 
-const statusColors: Record<CustomerSummary["status"], string> = {
+const statusColors: Record<CustomerListItem["status"], string> = {
   open: "ember.500",
   in_progress: "slate.700",
   done: "slate.400"
 };
 
-const buildAgendaMarkdown = (customer: CustomerSummary): string => {
-  const noteLines = customer.notes.map((note) => `- ${note}`);
-  return `# ${customer.name} - Call agenda\n\n## Agenda\n- Review last action items\n- Open questions\n- Next steps\n\n## Recent Notes\n${noteLines.join("\n")}\n\n## Email Draft\nHi team,\n\nSharing a draft agenda for the ${customer.name} call. Add anything I missed.\n`;
-};
-
-const groupByStatus = (customers: CustomerSummary[]) => {
+const groupByStatus = (customers: CustomerListItem[]) => {
   return customers.reduce(
     (acc, customer) => {
       acc[customer.status].push(customer);
       return acc;
     },
-    { open: [], in_progress: [], done: [] } as Record<CustomerSummary["status"], CustomerSummary[]>
+    { open: [], in_progress: [], done: [] } as Record<CustomerListItem["status"], CustomerListItem[]>
   );
 };
 
-const App = () => {
-  const [selectedId, setSelectedId] = useState(sampleCustomers[0]?.id ?? "");
-  const [markdown, setMarkdown] = useState(sampleMarkdown);
-  const selected = sampleCustomers.find((customer) => customer.id === selectedId) ?? sampleCustomers[0];
+const apiBase = import.meta.env.VITE_API_URL ?? "http://localhost:4310";
 
-  const grouped = useMemo(() => groupByStatus(sampleCustomers), []);
+const fetchJson = async <T,>(url: string, options?: RequestInit): Promise<T> => {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+const App = () => {
+  const [customers, setCustomers] = useState<CustomerListItem[]>([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [markdown, setMarkdown] = useState<string>("Select a customer to view notes.");
+  const [loading, setLoading] = useState(true);
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const data = await fetchJson<
+          Array<{ customerId: string; customerName: string; updatedAt: string; openTodoCount: number; lastCallAt: string | null }>
+        >(`${apiBase}/api/customers`);
+        const mapped: CustomerListItem[] = data.map((entry) => ({
+          id: entry.customerId,
+          name: entry.customerName,
+          account: "Account",
+          status: entry.openTodoCount > 0 ? "in_progress" : "open",
+          nextCall: entry.lastCallAt ? new Date(entry.lastCallAt).toLocaleString() : "No recent calls",
+          notes: []
+        }));
+        setCustomers(mapped);
+        if (mapped.length > 0) {
+          setSelectedId(mapped[0].id);
+        }
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const selected = customers.find((customer) => customer.id === selectedId) ?? null;
+  const grouped = useMemo(() => groupByStatus(customers), [customers]);
+
+  const handleMakeAgenda = async () => {
+    if (!selected) {
+      return;
+    }
+    try {
+      setAgendaLoading(true);
+      const agenda = await fetchJson<{ markdown: string }>(`${apiBase}/api/customers/${selected.id}/agenda`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recent: 3 })
+      });
+      setMarkdown(agenda.markdown);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setAgendaLoading(false);
+    }
+  };
 
   return (
     <Box px={{ base: 4, md: 10 }} py={{ base: 6, md: 10 }}>
@@ -67,6 +123,11 @@ const App = () => {
             <Text fontSize={{ base: "md", md: "lg" }} color="slate.700">
               Capture raw notes mid-call, then generate a clean agenda and email summary in one click.
             </Text>
+            {error && (
+              <Badge colorScheme="red" w="fit-content">
+                {error}
+              </Badge>
+            )}
           </Stack>
           <Box
             bg="white"
@@ -79,11 +140,11 @@ const App = () => {
               Today
             </Text>
             <Heading fontSize="2xl" mt={2}>
-              4 calls · 11 tasks
+              {customers.length} customers · {customers.reduce((sum, customer) => sum + (customer.status !== "done" ? 1 : 0), 0)} active
             </Heading>
             <Divider my={4} borderColor="slate.200" />
             <Stack spacing={3}>
-              {sampleCustomers.slice(0, 2).map((customer) => (
+              {customers.slice(0, 2).map((customer) => (
                 <Flex key={customer.id} justify="space-between" align="center">
                   <Text fontWeight={600}>{customer.name}</Text>
                   <Text fontSize="sm" color="slate.500">
@@ -98,7 +159,9 @@ const App = () => {
         <Stack spacing={6}>
           <Heading fontSize={{ base: "2xl", md: "3xl" }}>Customer list</Heading>
           <Stack spacing={3}>
-            {sampleCustomers.map((customer) => (
+            {loading && <Text color="slate.500">Loading customers...</Text>}
+            {!loading && customers.length === 0 && <Text color="slate.500">No customers found.</Text>}
+            {customers.map((customer) => (
               <Flex
                 key={customer.id}
                 p={4}
@@ -154,7 +217,12 @@ const App = () => {
 
         {selected && (
           <Stack spacing={6}>
-            <Flex justify="space-between" align={{ base: "flex-start", md: "center" }} direction={{ base: "column", md: "row" }} gap={3}>
+            <Flex
+              justify="space-between"
+              align={{ base: "flex-start", md: "center" }}
+              direction={{ base: "column", md: "row" }}
+              gap={3}
+            >
               <Stack spacing={1}>
                 <Heading fontSize={{ base: "2xl", md: "3xl" }}>{selected.name}</Heading>
                 <Text color="slate.600">Call prep workspace · {selected.nextCall}</Text>
@@ -163,7 +231,8 @@ const App = () => {
                 bg="ember.500"
                 color="white"
                 _hover={{ bg: "ember.600" }}
-                onClick={() => setMarkdown(buildAgendaMarkdown(selected))}
+                onClick={handleMakeAgenda}
+                isLoading={agendaLoading}
               >
                 Make agenda
               </Button>

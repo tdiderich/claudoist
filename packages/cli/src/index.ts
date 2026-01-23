@@ -2,9 +2,10 @@
 import { Command } from "commander";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { FileStorageAdapter, type CallDoc, type CallNote, type TodoItem } from "@claudoist/core";
+import { FileStorageAdapter, type CallDoc, type CallNote } from "@claudoist/core";
 import { runCallPlanner } from "./agentRuntime.js";
 import { generateId, parseTags } from "./parse.js";
+import { createServer } from "./server.js";
 
 const program = new Command();
 
@@ -130,6 +131,19 @@ program
     const output = runCallPlanner({ customerId: input.customerId, agendaTitle: input.agendaTitle }, notes);
 
     console.log(JSON.stringify(output, null, 2));
+  });
+
+program
+  .command("serve")
+  .description("Run a local API server for the web UI")
+  .option("--port <port>", "Port to listen on", "4310")
+  .option("--data-dir <path>", "Data directory")
+  .action(async (options) => {
+    const port = Number.parseInt(options.port, 10);
+    const server = createServer(resolveDataDir(options.dataDir));
+    server.listen(port, () => {
+      console.log(`Claudoist server listening on http://localhost:${port}`);
+    });
   });
 
 program.parseAsync(process.argv).catch((error) => {

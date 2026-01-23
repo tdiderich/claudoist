@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildAgenda } from "../agenda.js";
 
 const notes = [
-  { id: "note-1", callId: "call-1", createdAt: "2024-10-01T10:00:00Z", source: "manual", text: "Confirm integration plan.", tags: [] },
-  { id: "note-2", callId: "call-1", createdAt: "2024-10-01T10:05:00Z", source: "manual", text: "Pricing review needed.", tags: [] }
+  { id: "note-1", callId: "call-1", createdAt: "2024-10-01T10:00:00Z", source: "manual" as const, text: "Confirm integration plan.", tags: [] },
+  { id: "note-2", callId: "call-1", createdAt: "2024-10-01T10:05:00Z", source: "manual" as const, text: "Pricing review needed.", tags: [] }
 ];
 
 describe("buildAgenda", () => {

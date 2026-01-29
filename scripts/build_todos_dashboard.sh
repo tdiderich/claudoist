@@ -33,6 +33,24 @@ tmp="$(mktemp)"
     ' "$f" >> "$tmp"
   done
 
+  if [[ -f "internal/todos.md" ]]; then
+    echo
+    echo "## Internal"
+    echo
+    tail -n +2 "internal/todos.md" | sed 's/^## /#### /'
+
+    awk -v acct="Internal" '
+      /^## Done/ {in_done=1; next}
+      /^## Archive \(Done\)/ {in_done=1; next}
+      /^## / {in_done=0}
+      in_done && /^- \[x\]/ {
+        line=$0
+        sub(/^- \[x\] /, "", line)
+        print "- [x] " acct " - " line
+      }
+    ' "internal/todos.md" >> "$tmp"
+  fi
+
   echo
   echo "## Archive (Done)"
   echo

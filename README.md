@@ -16,6 +16,7 @@ This is a plain-text customer success operating system. Notes are append-only, a
 - `schemas/` JSON schemas for frontmatter fields
 - `templates/` starter docs
 - `weekly/` weekly review outputs
+- `internal/` non-customer work (internal todos and notes)
 
 ## Guardrails
 

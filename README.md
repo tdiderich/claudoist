@@ -86,3 +86,16 @@ Sensitive content is gitignored by default (`accounts/`, `inbox/`, `weekly/`, `m
 ## Agents
 
 This repo is agent-agnostic. Use prompt files in `prompts/`.
+
+## Branching model
+
+- Use `main` for the public template.
+- Use a local-only `work` branch for personal notes and internal work.
+- Use `feature/<name>` or `fix/<name>` for contributions you want to share.
+
+To prevent accidental pushes from `work`, install the local pre-push hook:
+
+```bash
+cp scripts/hooks/pre-push-work.sh .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```

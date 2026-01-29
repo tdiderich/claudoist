@@ -1,0 +1,11 @@
+{
+  "domains": {
+    "acme.com": "acme-co"
+  },
+  "keywords": {
+    "Acme": "acme-co"
+  },
+  "attendees": {
+    "csm@acme.com": "acme-co"
+  }
+}

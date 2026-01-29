@@ -87,6 +87,7 @@ Command reference:
 - `new-note <account-slug> <note-slug>`: creates a dated note file in `accounts/<account>/notes/`
 - `ingest-call <account-slug> <rawfile> [note-slug]`: prints the steps to process a raw note with prompts
 - `process-next-calls [--changed]`: lists `next_call.md` files and reminds the processing flow (`--changed` only shows modified files)
+- `plan-calls [days]`: pulls upcoming calendar events and pre-fills agendas in `next_call.md`
 - `build-dashboard`: rebuilds `TODOS.md` from all per-account todos (and internal if present)
 - `watch-todos`: live-updates `TODOS.md` when account todos change (requires `fswatch`)
 
@@ -105,6 +106,21 @@ EOF
 ```
 
 Note: `claude` and `copilot` are invoked with inline prompts; very large notes may exceed their CLI limits. For long inputs, prefer `codex` or `gemini`.
+
+## Calendar planning (plan-calls)
+
+`./claudoist plan-calls [days]` reads your **primary** Google Calendar (read-only) and pre-fills `accounts/<acct>/next_call.md` agendas for selected events. If no `days` is provided, it defaults to the rest of the work week (Mon–Fri).
+
+Setup (one-time):
+- Create a Google OAuth **Desktop** client and download the JSON file to `data/private/google-oauth.json`.
+- Install dependencies:
+  - `python3 -m pip install --user google-api-python-client google-auth-httplib2 google-auth-oauthlib`
+
+Mapping events to accounts:
+- Create `data/private/calendar_map.json` (ignored by git). Example template: `templates/calendar_map.example.json`.
+- The script uses attendee email or domain mappings first, then keyword matches, then asks you to pick from account slugs.
+
+After updating `next_call.md`, the script will show the current file and ask if you want to run the agent to refine the agenda and todos (uses `prompts/plan_agenda.md`).
 
 ## Data folder
 

@@ -22,6 +22,10 @@ Commands:
       lists next_call.md files and reminds the processing flow
       --changed only shows modified files
 
+  plan-calls [days]
+      pull upcoming calendar events and prefill next_call.md agendas
+      days defaults to rest of work week; uses Google Calendar OAuth
+
   build-dashboard
       rebuilds TODOS.md from all per-account todos (and internal if present)
 
@@ -45,6 +49,9 @@ case "$cmd" in
     ;;
   process-next-calls)
     scripts/process_next_calls.sh "$@"
+    ;;
+  plan-calls)
+    scripts/plan_calls.sh "$@"
     ;;
   build-dashboard)
     scripts/build_todos_dashboard.sh "$@"

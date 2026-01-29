@@ -5,6 +5,7 @@ coverage/
 .env
 *.log
 *.tsbuildinfo
+.venv/
 web/dist/
 web/node_modules/
 packages/*/node_modules/

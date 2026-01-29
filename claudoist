@@ -26,6 +26,9 @@ Commands:
       pull upcoming calendar events and prefill next_call.md agendas
       days defaults to rest of work week; uses Google Calendar OAuth
 
+  google-authenticate
+      set up Google Calendar OAuth and dependencies (runs bootstrap + auth)
+
   build-dashboard
       rebuilds TODOS.md from all per-account todos (and internal if present)
 
@@ -52,6 +55,9 @@ case "$cmd" in
     ;;
   plan-calls)
     scripts/plan_calls.sh "$@"
+    ;;
+  google-authenticate)
+    scripts/google_authenticate.sh "$@"
     ;;
   build-dashboard)
     scripts/build_todos_dashboard.sh "$@"

@@ -294,6 +294,10 @@ def maybe_run_agent(next_call_path):
 
 def main():
     days = None
+    auth_only = False
+    if "--auth-only" in sys.argv:
+        auth_only = True
+        sys.argv = [arg for arg in sys.argv if arg != "--auth-only"]
     if len(sys.argv) > 1:
         try:
             days = int(sys.argv[1])
@@ -304,9 +308,12 @@ def main():
             print("Invalid days argument; expected a positive integer")
             sys.exit(1)
 
-    start, end = date_range(days)
-
     try:
+        if auth_only:
+            load_credentials()
+            print("Google Calendar auth complete.")
+            return
+        start, end = date_range(days)
         events = fetch_events(start, end, get_tzinfo())
     except Exception as e:
         print("Failed to fetch calendar events:", e)

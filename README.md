@@ -88,6 +88,7 @@ Command reference:
 - `ingest-call <account-slug> <rawfile> [note-slug]`: prints the steps to process a raw note with prompts
 - `process-next-calls [--changed]`: lists `next_call.md` files and reminds the processing flow (`--changed` only shows modified files)
 - `plan-calls [days]`: pulls upcoming calendar events and pre-fills agendas in `next_call.md`
+- `google-authenticate`: bootstraps Google Calendar OAuth + dependencies
 - `build-dashboard`: rebuilds `TODOS.md` from all per-account todos (and internal if present)
 - `watch-todos`: live-updates `TODOS.md` when account todos change (requires `fswatch`)
 
@@ -113,8 +114,11 @@ Note: `claude` and `copilot` are invoked with inline prompts; very large notes m
 
 Setup (one-time):
 - Create a Google OAuth **Desktop** client and download the JSON file to `data/private/google-oauth.json`.
-- Install dependencies:
-  - `python3 -m pip install --user google-api-python-client google-auth-httplib2 google-auth-oauthlib`
+- Run `./claudoist google-authenticate` to create a local `.venv`, install deps, and complete OAuth.
+- Or run `scripts/bootstrap_plan_calls.sh` to create a local `.venv` and install dependencies.
+  - To force a specific Python, set `PYTHON_BIN`, e.g. `PYTHON_BIN=/opt/homebrew/opt/python@3.12/bin/python3.12 ./claudoist google-authenticate`.
+  - If you prefer manual setup, install deps in your own virtualenv:
+    - `python3 -m pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib`
 
 Mapping events to accounts:
 - Create `data/private/calendar_map.json` (ignored by git). Example template: `templates/calendar_map.example.json`.

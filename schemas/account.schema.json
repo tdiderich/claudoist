@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AccountFrontmatter",
+  "type": "object",
+  "required": ["account", "segment", "stage"],
+  "properties": {
+    "account": {"type": "string"},
+    "segment": {"type": "string", "enum": ["enterprise", "mid-market", "smb", ""]},
+    "stage": {
+      "type": "string",
+      "enum": ["onboarding", "adoption", "expansion", "renewal", "at-risk", ""]
+    },
+    "primary_outcomes": {"type": "array", "items": {"type": "string"}},
+    "success_criteria": {"type": "array", "items": {"type": "string"}},
+    "risks": {"type": "array", "items": {"type": "string"}},
+    "stakeholders": {
+      "type": "object",
+      "properties": {
+        "champion": {"type": "string"},
+        "exec": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "next_milestone": {"type": "string"},
+    "last_touch": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$|^$"},
+    "next_touch": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$|^$"},
+    "links": {
+      "type": "object",
+      "properties": {
+        "crm": {"type": "string"},
+        "slack": {"type": "string"},
+        "jira": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

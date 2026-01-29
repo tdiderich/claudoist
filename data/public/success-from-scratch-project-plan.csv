@@ -1,0 +1,46 @@
+﻿Tasks,Phase,Section,Status,Type
+Enable your internal team to hone in on these during the sales process and customer implementation,Essentials,Standard Success Outcomes,Todo,Action
+Identify key results of those use cases and successes,Essentials,Standard Success Outcomes,Todo,Research
+Read your API documentation,Essentials,Building Bedrock,Todo,Research
+Discuss current customer successes with the team,Essentials,Standard Success Outcomes,Todo,Research
+"Click every button, knob, etc in your product’s UI and see what happens",Essentials,Building Bedrock,Todo,Research
+Learn the core use cases of your product and how customers are accomplishing them,Essentials,Building Bedrock,Todo,Research
+Watch all public facing demos of your product or sit in on a few live demos,Essentials,Building Bedrock,Todo,Research
+"If you don’t understand something, ask your product team to help you understand",Essentials,Building Bedrock,Todo,Research
+Create documentation and a slide that easily illustrates the success outcomes,Essentials,Standard Success Outcomes,Todo,Documentation
+Try to understand what your infrastructure looks like behind the scenes,Essentials,Building Bedrock,Todo,Research
+Identify themes for those use cases and successes,Essentials,Standard Success Outcomes,Todo,Research
+Fully document this process to make it repeatable for future hires,Essentials,Building Bedrock,Todo,Documentation
+Use your Path to Product Expert Documentation to create an onboarding plan for new hires,Essentials,Building Bedrock,Todo,Action
+Get feedback on what was missed from your top 5-10 customers based on engagement,Essentials,Standard Success Outcomes,Todo,Action
+Read through all of the customer facing documentation of your product and try everything along the way,Essentials,Building Bedrock,Todo,Research
+Read all the internal documentation your product team has built related to your product,Essentials,Building Bedrock,Todo,Research
+Discuss common use cases with internal team,Essentials,Standard Success Outcomes,Todo,Research
+Implement full scoring methodology and test the scores against the account team sentiments across the board,Efficiency,Customer Health Hero,Todo,Action
+Make the product metric data accessible to other teams in your company,Efficiency,Customer Health Hero,Todo,Action
+Review the journey quarterly to see if any new product releases have changed the journey,Efficiency,Onboarding Outline,Todo,Action
+List all product metrics potentially relevant to a customer health score,Efficiency,Customer Health Hero,Todo,Documentation
+Add all auxiliary tasks the customer will likely need to do outside of your product,Efficiency,Onboarding Outline,Todo,Documentation
+List all tasks you’d need to do in your product to accomplish each success outcome identified,Efficiency,Onboarding Outline,Todo,Documentation
+Record training videos of all key product features,Efficiency,Onboarding Outline,Todo,Action
+"Determine if you need non-technical CSMs, technical CSMs, or both for each segment",Enterprise,Geared for Growth,Todo,Research
+Create a first scoring methodology and start testing manually on customers,Efficiency,Customer Health Hero,Todo,Documentation
+Build 30-60-90 day plans for your CSMs to clearly set expectations,Enterprise,Geared for Growth,Todo,Documentation
+Build your job description and comp plan to begin the recruiting process,Enterprise,Geared for Growth,Todo,Documentation
+"Capture feedback from sales, marketing, product, and any other team relevant at your company",Efficiency,Onboarding Outline,Todo,Research
+Get buy-in from product team on capturing these product metrics,Efficiency,Customer Health Hero,Todo,Action
+Identify process that you need triggers for automation on,Enterprise,Automating Activities,Todo,Research
+Write how to guides,Efficiency,Onboarding Outline,Todo,Documentation
+Build project plan for each trigger or process you’d like to automate,Enterprise,Automating Activities,Todo,Documentation
+Start tracking health scores vs renewal rates,Efficiency,Customer Health Hero,Todo,Action
+Estimate what ratios make sense for CSM to customer based on you customer segments,Enterprise,Geared for Growth,Todo,Action
+Start using your customer journey with high touch customers to help you iterate on it moving forward,Efficiency,Onboarding Outline,Todo,Action
+"Determine how you'd like to segment your customers between tech touch, hybrid touch, and high touch",Enterprise,Geared for Growth,Todo,Action
+Begin using health scores as a way to trigger proactive outreach to customers at risk,Efficiency,Customer Health Hero,Todo,Action
+"Align all tasks with existing documentation, videos, and guides to identify gaps in your customer facing collateral",Efficiency,Onboarding Outline,Todo,Action
+Build onboarding plans for your CSMs to simplify onboarding,Enterprise,Geared for Growth,Todo,Documentation
+Identity simple internal process that is consistently followed,Enterprise,Automating Activities,Todo,Research
+Identify triggers that you are interested in taking actions on,Enterprise,Automating Activities,Todo,Research
+Iterate on the automation as you discover ways to improve,Enterprise,Automating Activities,Todo,Action
+Write deployment guides,Efficiency,Onboarding Outline,Todo,Documentation
+Installation and configuration docs,Efficiency,Onboarding Outline,Todo,Documentation

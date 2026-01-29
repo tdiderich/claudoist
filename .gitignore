@@ -12,3 +12,23 @@ packages/*/dist/
 data/customers/*.json
 web/vite.config.d.ts
 web/vite.config.js
+
+# CS workbench sensitive content
+TODOS.md
+accounts/**
+!accounts/.gitkeep
+!accounts/README.md
+inbox/**
+!inbox/.gitkeep
+!inbox/README.md
+weekly/**
+!weekly/.gitkeep
+!weekly/README.md
+metrics/**
+!metrics/.gitkeep
+!metrics/README.md
+data/private/**
+!data/private/.gitkeep
+
+# Beads runtime
+.beads/bd.sock.startlock

@@ -14,8 +14,15 @@ echo "Ingesting: $raw"
 echo "Account: $acct"
 [[ -n "$slug" ]] && echo "Note slug: $slug"
 
+context="Account: $acct"
+[[ -n "$slug" ]] && context="$context\nNote slug: $slug"
+
+if scripts/run_agent.sh prompts/summarize_call.md "$raw" "$context"; then
+  exit 0
+fi
+
 echo
 echo "Next steps:"
-echo "1) Run Codex with .codex/prompts/summarize_call.md on the raw note."
-echo "2) Review the \"Recommended account updates\" section. If approved, run .codex/prompts/update_account.md."
+echo "1) Run your agent with prompts/summarize_call.md on the raw note."
+echo "2) Review the \"Recommended account updates\" section. If approved, run prompts/update_account.md."
 echo "3) Rebuild the global dashboard: scripts/build_todos_dashboard.sh"

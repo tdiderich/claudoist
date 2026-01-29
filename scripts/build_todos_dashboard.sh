@@ -51,6 +51,24 @@ tmp="$(mktemp)"
     ' "internal/todos.md" >> "$tmp"
   fi
 
+  if [[ -f "internal/onboarding/todos.md" ]]; then
+    echo
+    echo "## Internal - Onboarding"
+    echo
+    tail -n +2 "internal/onboarding/todos.md" | sed 's/^## /#### /'
+
+    awk -v acct="Internal - Onboarding" '
+      /^## Done/ {in_done=1; next}
+      /^## Archive \(Done\)/ {in_done=1; next}
+      /^## / {in_done=0}
+      in_done && /^- \[x\]/ {
+        line=$0
+        sub(/^- \[x\] /, "", line)
+        print "- [x] " acct " - " line
+      }
+    ' "internal/onboarding/todos.md" >> "$tmp"
+  fi
+
   echo
   echo "## Archive (Done)"
   echo

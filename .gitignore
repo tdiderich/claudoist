@@ -30,8 +30,11 @@ metrics/**
 internal/**
 !internal/README.md
 !internal/todos.md
+!internal/onboarding/README.md
+!internal/onboarding/todos.md
 data/private/**
 !data/private/.gitkeep
 
 # Beads runtime
 .beads/bd.sock.startlock
+claudoist.local.config

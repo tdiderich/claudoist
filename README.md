@@ -71,6 +71,41 @@ done < /tmp/accounts.txt
 scripts/build_todos_dashboard.sh
 ```
 
+## CLI shortcuts (repo-only)
+
+Use the repo-local wrapper to run common tasks:
+
+```bash
+./claudoist new-account acme-co "Acme Co"
+./claudoist new-note acme-co kickoff
+./claudoist process-next-calls --changed
+./claudoist build-dashboard
+```
+
+Command reference:
+- `new-account <slug> <Account Name>`: scaffolds `accounts/<slug>/` with `account.md`, `todos.md`, and `next_call.md`
+- `new-note <account-slug> <note-slug>`: creates a dated note file in `accounts/<account>/notes/`
+- `ingest-call <account-slug> <rawfile> [note-slug]`: prints the steps to process a raw note with prompts
+- `process-next-calls [--changed]`: lists `next_call.md` files and reminds the processing flow (`--changed` only shows modified files)
+- `build-dashboard`: rebuilds `TODOS.md` from all per-account todos (and internal if present)
+- `watch-todos`: live-updates `TODOS.md` when account todos change (requires `fswatch`)
+
+## Agent automation
+
+Set your default agent in `claudoist.config` and the CLI will auto-run the agent for `ingest-call` and `process-next-calls`. If `AGENT=manual`, the scripts only print the recommended flow.
+
+Supported values: `codex`, `claude`, `gemini`, `copilot`, `manual`.
+
+Example:
+
+```bash
+cat <<'EOF' > claudoist.config
+AGENT=codex
+EOF
+```
+
+Note: `claude` and `copilot` are invoked with inline prompts; very large notes may exceed their CLI limits. For long inputs, prefer `codex` or `gemini`.
+
 ## Data folder
 
 `data/public/` is for shareable, git-tracked data. `data/private/` is ignored by git for sensitive data.

@@ -21,8 +21,20 @@ fi
 echo "Next-call files to process:"
 echo "$files" | sed 's/^/ - /'
 
+processed_any=false
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  if scripts/run_agent.sh prompts/process_next_call.md "$file"; then
+    processed_any=true
+  fi
+done <<< "$files"
+
+if $processed_any; then
+  exit 0
+fi
+
 echo
 echo "Recommended flow:"
-echo "1) For each file, run Codex with .codex/prompts/summarize_call.md to create a dated note + update todos."
-echo "2) Review the 'Recommended account updates' section; if approved, run .codex/prompts/update_account.md."
+echo "1) For each file, run your agent with prompts/process_next_call.md to create a dated note + update todos."
+echo "2) Review the 'Recommended account updates' section; if approved, run prompts/update_account.md."
 echo "3) Rebuild global dashboard: scripts/build_todos_dashboard.sh"

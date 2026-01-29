@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 import json
-import os
 import subprocess
 import sys
 from datetime import datetime, timedelta, date, time
 from pathlib import Path
-
-try:
-    from zoneinfo import ZoneInfo
-except Exception:  # pragma: no cover
-    ZoneInfo = None
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 CLIENT_SECRET = Path("data/private/google-oauth.json")
@@ -119,13 +113,19 @@ def fetch_events(start, end, tzinfo):
     return events_result.get("items", [])
 
 
+def parse_iso(dt_str):
+    if dt_str.endswith("Z"):
+        dt_str = dt_str[:-1] + "+00:00"
+    return datetime.fromisoformat(dt_str)
+
+
 def format_event_time(ev):
     start = ev.get("start", {})
     if "dateTime" in start:
-        dt = datetime.fromisoformat(start["dateTime"])
+        dt = parse_iso(start["dateTime"])
         return dt
     if "date" in start:
-        d = datetime.fromisoformat(start["date"])
+        d = parse_iso(start["date"])
         return d
     return None
 
@@ -229,6 +229,9 @@ def update_next_call(next_call_path, ev):
     agenda_line = f"- {when} - {summary}"
 
     # Insert under Agenda section if not already present
+    if agenda_line in content:
+        return
+
     out = []
     in_agenda = False
     inserted = False
@@ -296,6 +299,9 @@ def main():
             days = int(sys.argv[1])
         except ValueError:
             print("Invalid days argument; expected integer")
+            sys.exit(1)
+        if days <= 0:
+            print("Invalid days argument; expected a positive integer")
             sys.exit(1)
 
     start, end = date_range(days)

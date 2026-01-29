@@ -9,6 +9,7 @@ This repo is agent-agnostic. Use prompts from the `prompts/` folder.
 - `prompts/update_account.md` - update `accounts/<account>/account.md` frontmatter after review
 - `prompts/weekly_review.md` - create weekly summaries in `weekly/`
 - `prompts/plan_next_steps.md` - propose next actions and risks (no file edits)
+- `prompts/plan_agenda.md` - propose agenda + prep items for upcoming call (patch next_call.md)
 
 ## Conventions
 

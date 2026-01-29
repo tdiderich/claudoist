@@ -1,5 +1,0 @@
-Chakra UI notes:
-- Use @chakra-ui/react with ChakraProvider at the app root.
-- Prefer semantic components (Box, Flex, Stack, Heading, Text, Button).
-- Theme tokens should live in a single theme file.
-Docs: https://chakra-ui.com

@@ -27,9 +27,6 @@ weekly/**
 metrics/**
 !metrics/.gitkeep
 !metrics/README.md
-internal/**
-!internal/README.md
-!internal/todos.md
 data/private/**
 !data/private/.gitkeep
 

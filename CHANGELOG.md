@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.2 - 2026-01-30
+
+- Fix Homebrew packaging (include npm manifest)
+
 ## v0.0.1 - 2026-01-30
 
 - Node-based CLI replaces the Bash wrapper

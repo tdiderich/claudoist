@@ -1,6 +1,6 @@
 {
   "name": "claudoist",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "AI-native customer success workbench CLI",
   "bin": {
     "claudoist": "claudoist"

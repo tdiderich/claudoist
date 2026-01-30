@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.0.3 - 2026-01-30
+
+- Fix Homebrew install when playbooks directory is empty
+
 ## v0.0.2 - 2026-01-30
 
 - Fix Homebrew packaging (include npm manifest)

@@ -8,9 +8,13 @@ class Claudoist < Formula
   depends_on "node"
 
   def install
-    files = (Dir[".*", "*"] - [".", ".."])
-    libexec.install files
-    system "npm", "install", "--production", "--prefix", libexec
+    libexec.install "claudoist"
+    libexec.install "package.json"
+    libexec.install "package-lock.json" if File.exist?("package-lock.json")
+    libexec.install "templates", "prompts", "schemas", "scripts", "playbooks"
+    libexec.install "README.md", "CHANGELOG.md", "AGENTS.md", "claudoist.config", "TODOS.example.md"
+
+    system "npm", "install", "--omit=dev", "--prefix", libexec
 
     bin.write_exec_script libexec/"claudoist"
   end

@@ -29,6 +29,21 @@ This is a plain-text customer success operating system. Notes are append-only, a
 
 `TODOS.md` contains a section per account plus a global archive of done items. Per-account `todos.md` also includes its own archive section. A shareable template lives at `TODOS.example.md`.
 
+## Install CLI
+
+Option A (npm):
+
+```bash
+npm install -g claudoist
+```
+
+Option B (Homebrew, head-only):
+
+```bash
+brew tap tdiderich/claudoist
+brew install --HEAD claudoist
+```
+
 ## Quickstart (day-to-day)
 
 1. Create an account
@@ -71,26 +86,30 @@ done < /tmp/accounts.txt
 scripts/build_todos_dashboard.sh
 ```
 
-## CLI shortcuts (repo-only)
+## CLI shortcuts
 
-Use the repo-local wrapper to run common tasks:
+Use the repo-local wrapper (`./claudoist`) or the global CLI (`claudoist`) if installed:
 
 ```bash
 ./claudoist new-account acme-co "Acme Co"
 ./claudoist new-note acme-co kickoff
 ./claudoist process-next-calls --changed
 ./claudoist build-dashboard
+
+# if installed globally
+claudoist new-account acme-co "Acme Co"
 ```
 
 Command reference:
+- `init [path]`: scaffold a new repo (creates folders + copies templates/prompts/scripts)
 - `new-account <slug> <Account Name>`: scaffolds `accounts/<slug>/` with `account.md`, `todos.md`, and `next_call.md`
 - `new-note <account-slug> <note-slug>`: creates a dated note file in `accounts/<account>/notes/`
 - `ingest-call <account-slug> <rawfile> [note-slug]`: prints the steps to process a raw note with prompts
 - `process-next-calls [--changed]`: lists `next_call.md` files and reminds the processing flow (`--changed` only shows modified files)
 - `plan-calls [days]`: pulls upcoming calendar events and pre-fills agendas in `next_call.md`
-- `google-authenticate`: bootstraps Google Calendar OAuth + dependencies
+- `google-authenticate`: sets up Google Calendar OAuth
 - `build-dashboard`: rebuilds `TODOS.md` from all per-account todos (and internal if present)
-- `watch-todos`: live-updates `TODOS.md` when account todos change (requires `fswatch`)
+- `watch-todos`: live-updates `TODOS.md` when account todos change
 
 ## Agent automation
 
@@ -114,11 +133,7 @@ Note: `claude` and `copilot` are invoked with inline prompts; very large notes m
 
 Setup (one-time):
 - Create a Google OAuth **Desktop** client and download the JSON file to `data/private/google-oauth.json`.
-- Run `./claudoist google-authenticate` to create a local `.venv`, install deps, and complete OAuth.
-- Or run `scripts/bootstrap_plan_calls.sh` to create a local `.venv` and install dependencies.
-  - To force a specific Python, set `PYTHON_BIN`, e.g. `PYTHON_BIN=/opt/homebrew/opt/python@3.12/bin/python3.12 ./claudoist google-authenticate`.
-  - If you prefer manual setup, install deps in your own virtualenv:
-    - `python3 -m pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib`
+- Run `./claudoist google-authenticate` to complete OAuth.
 
 Mapping events to accounts:
 - Create `data/private/calendar_map.json` (ignored by git). Example template: `templates/calendar_map.example.json`.
@@ -132,7 +147,9 @@ After updating `next_call.md`, the script will show the current file and ask if 
 
 ## Auto-updating TODOS.md
 
-Run `scripts/build_todos_dashboard.sh` after any per-account TODO updates. If you want live updates, run `scripts/watch_todos.sh` (requires `fswatch`, install with `brew install fswatch`).
+Run `scripts/build_todos_dashboard.sh` after any per-account TODO updates. If you want live updates:
+- `./claudoist watch-todos` (Node file watcher)
+- `scripts/watch_todos.sh` (requires `fswatch`, install with `brew install fswatch`)
 
 ## Open-source friendly
 

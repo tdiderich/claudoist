@@ -1,0 +1,32 @@
+{
+  "name": "claudoist",
+  "version": "0.0.1",
+  "description": "AI-native customer success workbench CLI",
+  "bin": {
+    "claudoist": "claudoist"
+  },
+  "type": "commonjs",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "googleapis": "^133.0.0"
+  },
+  "files": [
+    "claudoist",
+    "templates",
+    "prompts",
+    "schemas",
+    "scripts",
+    "playbooks",
+    "docs",
+    "README.md",
+    "CHANGELOG.md",
+    "AGENTS.md",
+    "claudoist.config",
+    "TODOS.example.md",
+    ".gitignore",
+    ".gitattributes"
+  ]
+}

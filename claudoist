@@ -1,76 +1,1124 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env node
+'use strict';
 
-cmd="${1:-}"
-shift || true
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const readline = require('readline');
+const http = require('http');
+const { spawnSync } = require('child_process');
 
-usage() {
-  cat <<'USAGE'
-Usage: ./claudoist <command> [args]
+const SCRIPT_ROOT = __dirname;
 
-Commands:
-  new-account <slug> <Account Name>
-      scaffolds accounts/<slug>/ with account.md, todos.md, and next_call.md
-
-  new-note <account-slug> <note-slug>
-      creates a dated note file in accounts/<account>/notes/
-
-  ingest-call <account-slug> <rawfile> [note-slug]
-      prints the steps to process a raw note with prompts
-
-  process-next-calls [--changed]
-      lists next_call.md files and reminds the processing flow
-      --changed only shows modified files
-
-  plan-calls [days]
-      pull upcoming calendar events and prefill next_call.md agendas
-      days defaults to rest of work week; uses Google Calendar OAuth
-
-  google-authenticate
-      set up Google Calendar OAuth and dependencies (runs bootstrap + auth)
-
-  build-dashboard
-      rebuilds TODOS.md from all per-account todos (and internal if present)
-
-  watch-todos
-      live-updates TODOS.md when account todos change (requires fswatch)
-
-  help
-      show this help
-USAGE
+function readPackageVersion() {
+  try {
+    const pkgPath = path.join(SCRIPT_ROOT, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    return pkg.version || '0.0.0';
+  } catch {
+    return '0.0.0';
+  }
 }
 
-case "$cmd" in
-  new-account)
-    scripts/new_account.sh "$@"
-    ;;
-  new-note)
-    scripts/new_note.sh "$@"
-    ;;
-  ingest-call)
-    scripts/ingest_call.sh "$@"
-    ;;
-  process-next-calls)
-    scripts/process_next_calls.sh "$@"
-    ;;
-  plan-calls)
-    scripts/plan_calls.sh "$@"
-    ;;
-  google-authenticate)
-    scripts/google_authenticate.sh "$@"
-    ;;
-  build-dashboard)
-    scripts/build_todos_dashboard.sh "$@"
-    ;;
-  watch-todos)
-    scripts/watch_todos.sh "$@"
-    ;;
-  help|""|-h|--help)
-    usage
-    ;;
-  *)
-    echo "Unknown command: $cmd" >&2
-    usage >&2
-    exit 1
-    ;;
-esac
+function usage() {
+  const version = readPackageVersion();
+  console.log(`claudoist v${version}\n`);
+  console.log(`Usage: claudoist <command> [args]\n`);
+  console.log(`Commands:\n`);
+  console.log(`  init [path]`);
+  console.log(`      scaffold a new claudoist repo in [path] (default: .)`);
+  console.log(`\n  new-account <slug> <Account Name>`);
+  console.log(`      scaffolds accounts/<slug>/ with account.md, todos.md, and next_call.md`);
+  console.log(`\n  new-note <account-slug> <note-slug> [type]`);
+  console.log(`      creates a dated note file in accounts/<account>/notes/`);
+  console.log(`\n  ingest-call <account-slug> <rawfile> [note-slug]`);
+  console.log(`      runs the summarize_call prompt via configured agent`);
+  console.log(`\n  process-next-calls [--changed]`);
+  console.log(`      lists next_call.md files and reminds the processing flow`);
+  console.log(`      --changed only shows modified files`);
+  console.log(`\n  plan-calls [days]`);
+  console.log(`      pull upcoming calendar events and prefill next_call.md agendas`);
+  console.log(`      days defaults to rest of work week; uses Google Calendar OAuth`);
+  console.log(`\n  google-authenticate`);
+  console.log(`      set up Google Calendar OAuth`);
+  console.log(`\n  build-dashboard [output]`);
+  console.log(`      rebuilds TODOS.md from all per-account todos (and internal if present)`);
+  console.log(`\n  watch-todos`);
+  console.log(`      live-updates TODOS.md when account todos change`);
+  console.log(`\n  help`);
+  console.log(`      show this help`);
+}
+
+function die(msg, code = 1) {
+  if (msg) {
+    console.error(msg);
+  }
+  process.exit(code);
+}
+
+function findRepoRoot(startDir) {
+  let dir = path.resolve(startDir);
+  while (true) {
+    if (
+      fs.existsSync(path.join(dir, 'claudoist.config')) ||
+      fs.existsSync(path.join(dir, 'templates', 'next_call.md')) ||
+      fs.existsSync(path.join(dir, 'prompts'))
+    ) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+function repoPath(repoRoot, ...parts) {
+  return path.join(repoRoot, ...parts);
+}
+
+function ensureRepoRoot() {
+  const repoRoot = findRepoRoot(process.cwd());
+  if (!repoRoot) {
+    die('Repo root not found. Run from a claudoist repo or use `claudoist init`.');
+  }
+  return repoRoot;
+}
+
+function readText(filePath) {
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function writeText(filePath, content) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function formatDateLocal(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function loadConfig(repoRoot) {
+  const cfgPath = repoPath(repoRoot, 'claudoist.config');
+  if (!fs.existsSync(cfgPath)) {
+    return {};
+  }
+  const lines = readText(cfgPath).split(/\r?\n/);
+  const config = {};
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const idx = trimmed.indexOf('=');
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const val = trimmed.slice(idx + 1).trim();
+    if (key) {
+      config[key] = val;
+    }
+  }
+  return config;
+}
+
+function runAgent(repoRoot, promptRel, inputFile, context) {
+  const promptFile = repoPath(repoRoot, promptRel);
+  if (!fs.existsSync(promptFile)) {
+    console.error(`Prompt file not found: ${promptFile}`);
+    return 1;
+  }
+  if (!fs.existsSync(inputFile)) {
+    console.error(`Input file not found: ${inputFile}`);
+    return 1;
+  }
+
+  const config = loadConfig(repoRoot);
+  const agent = config.AGENT || process.env.AGENT || 'manual';
+
+  if (!agent || agent === 'manual') {
+    return 2;
+  }
+
+  const combined = [
+    context ? '# Context\n' + context + '\n' : '',
+    '# Instructions\n' + readText(promptFile) + '\n',
+    '# Input\n' + readText(inputFile) + '\n',
+  ].join('\n');
+
+  let result;
+  if (agent === 'codex') {
+    result = spawnSync('codex', ['exec', '-'], { input: combined, stdio: ['pipe', 'inherit', 'inherit'] });
+  } else if (agent === 'claude') {
+    result = spawnSync('claude', ['-p', combined], { stdio: 'inherit' });
+  } else if (agent === 'gemini') {
+    result = spawnSync('gemini', ['-p', ''], { input: combined, stdio: ['pipe', 'inherit', 'inherit'] });
+  } else if (agent === 'copilot') {
+    result = spawnSync('copilot', ['-p', combined], { stdio: 'inherit' });
+  } else {
+    console.error(`Unknown AGENT: ${agent}`);
+    return 1;
+  }
+
+  return result.status ?? 1;
+}
+
+function newAccount(repoRoot, args) {
+  if (args.length < 2) {
+    die('Usage: claudoist new-account <account-slug> <Account Name>');
+  }
+  const slug = args[0];
+  const name = args.slice(1).join(' ');
+  const base = repoPath(repoRoot, 'accounts', slug);
+
+  fs.mkdirSync(repoPath(base, 'notes'), { recursive: true });
+  fs.mkdirSync(repoPath(base, 'artifacts', 'runbooks'), { recursive: true });
+  fs.mkdirSync(repoPath(base, 'artifacts', 'configs'), { recursive: true });
+  fs.mkdirSync(repoPath(base, 'artifacts', 'emails'), { recursive: true });
+
+  const accountTemplate = readText(repoPath(repoRoot, 'templates', 'account.md'));
+  const todosTemplate = readText(repoPath(repoRoot, 'templates', 'todos.md'));
+  const nextCallTemplate = readText(repoPath(repoRoot, 'templates', 'next_call.md'));
+
+  const accountContent = accountTemplate.replace(/^account: ".*"/m, `account: "${name}"`);
+  const todosContent = todosTemplate.replace(/\{\{account\}\}/g, name);
+  const nextCallContent = nextCallTemplate.replace(/^account: ""/m, `account: "${name}"`);
+
+  writeText(repoPath(base, 'account.md'), accountContent);
+  writeText(repoPath(base, 'todos.md'), todosContent);
+  writeText(repoPath(base, 'next_call.md'), nextCallContent);
+
+  console.log(`Created ${base} with account.md, todos.md, and next_call.md`);
+}
+
+function newNote(repoRoot, args) {
+  if (args.length < 2) {
+    die('Usage: claudoist new-note <account-slug> <note-slug> [type]');
+  }
+  const acct = args[0];
+  const slug = args[1];
+  const type = args[2] || '';
+
+  const dateStr = formatDateLocal();
+  const base = repoPath(repoRoot, 'accounts', acct, 'notes');
+  fs.mkdirSync(base, { recursive: true });
+
+  const file = repoPath(base, `${dateStr}-${slug}.md`);
+  let content = readText(repoPath(repoRoot, 'templates', 'note.md'));
+  content = content.replace(/^date: .*$/m, `date: ${dateStr}`);
+  if (type) {
+    content = content.replace(/^type: ""/m, `type: "${type}"`);
+  }
+
+  writeText(file, content);
+  console.log(`Created ${file}`);
+}
+
+function ingestCall(repoRoot, args) {
+  if (args.length < 2) {
+    die('Usage: claudoist ingest-call <account-slug> <raw-note-file> [note-slug]');
+  }
+
+  const acct = args[0];
+  const raw = args[1];
+  const slug = args[2] || '';
+
+  console.log(`Ingesting: ${raw}`);
+  console.log(`Account: ${acct}`);
+  if (slug) {
+    console.log(`Note slug: ${slug}`);
+  }
+
+  let context = `Account: ${acct}`;
+  if (slug) {
+    context += `\nNote slug: ${slug}`;
+  }
+
+  const result = runAgent(repoRoot, 'prompts/summarize_call.md', raw, context);
+  if (result === 0) {
+    return;
+  }
+
+  console.log('\nNext steps:');
+  console.log('1) Run your agent with prompts/summarize_call.md on the raw note.');
+  console.log('2) Review the "Recommended account updates" section. If approved, run prompts/update_account.md.');
+  console.log('3) Rebuild the global dashboard: claudoist build-dashboard');
+}
+
+function listNextCallFiles(repoRoot, changedOnly) {
+  if (changedOnly) {
+    const result = spawnSync('git', ['ls-files', '-m', '--', 'accounts/*/next_call.md'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    if (result.status === 0) {
+      return result.stdout.trim().split(/\r?\n/).filter(Boolean).map((p) => repoPath(repoRoot, p));
+    }
+    return [];
+  }
+
+  const accountsDir = repoPath(repoRoot, 'accounts');
+  if (!fs.existsSync(accountsDir)) {
+    return [];
+  }
+  const dirs = fs.readdirSync(accountsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+  const files = [];
+  for (const dir of dirs) {
+    const nextCall = repoPath(accountsDir, dir.name, 'next_call.md');
+    if (fs.existsSync(nextCall)) {
+      files.push(nextCall);
+    }
+  }
+  return files;
+}
+
+function processNextCalls(repoRoot, args) {
+  const changedOnly = args[0] === '--changed';
+  const files = listNextCallFiles(repoRoot, changedOnly);
+
+  if (!files.length) {
+    console.log('No next_call.md files found.');
+    return;
+  }
+
+  console.log('Next-call files to process:');
+  for (const file of files) {
+    console.log(` - ${path.relative(repoRoot, file)}`);
+  }
+
+  let processedAny = false;
+  for (const file of files) {
+    const result = runAgent(repoRoot, 'prompts/process_next_call.md', file, '');
+    if (result === 0) {
+      processedAny = true;
+    }
+  }
+
+  if (processedAny) {
+    return;
+  }
+
+  console.log('\nRecommended flow:');
+  console.log('1) For each file, run your agent with prompts/process_next_call.md to create a dated note + update todos.');
+  console.log('2) Review the "Recommended account updates" section; if approved, run prompts/update_account.md.');
+  console.log('3) Rebuild global dashboard: claudoist build-dashboard');
+}
+
+const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
+let googleApi = null;
+
+function getGoogleApi() {
+  if (!googleApi) {
+    try {
+      // Lazy-load so non-calendar commands work without node_modules.
+      googleApi = require('googleapis').google;
+    } catch (err) {
+      die('Missing dependency: googleapis. Run `npm install` or install the CLI via npm/Homebrew.');
+    }
+  }
+  return googleApi;
+}
+
+function weekdayIndex(date) {
+  return (date.getDay() + 6) % 7;
+}
+
+function addDays(date, days) {
+  const d = new Date(date.getTime());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function dateOnly(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function businessDaysFrom(startDate, count) {
+  const days = [];
+  let d = dateOnly(startDate);
+  while (days.length < count) {
+    if (weekdayIndex(d) < 5) {
+      days.push(new Date(d.getTime()));
+    }
+    d = addDays(d, 1);
+  }
+  return days;
+}
+
+function dateRange(daysArg) {
+  let today = dateOnly(new Date());
+  const weekday = weekdayIndex(today);
+  if (weekday >= 5) {
+    today = addDays(today, 7 - weekday);
+  }
+
+  if (daysArg) {
+    const days = businessDaysFrom(today, daysArg);
+    return { start: days[0], end: days[days.length - 1] };
+  }
+
+  const end = addDays(today, 4 - weekdayIndex(today));
+  return { start: today, end };
+}
+
+function formatTimeLocal(date) {
+  const h = String(date.getHours()).padStart(2, '0');
+  const m = String(date.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function formatDateTimeLocal(date) {
+  return `${formatDateLocal(date)} ${formatTimeLocal(date)}`;
+}
+
+function formatRfc3339(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const s = String(date.getSeconds()).padStart(2, '0');
+  const offset = -date.getTimezoneOffset();
+  const sign = offset >= 0 ? '+' : '-';
+  const off = Math.abs(offset);
+  const offH = String(Math.floor(off / 60)).padStart(2, '0');
+  const offM = String(off % 60).padStart(2, '0');
+  return `${y}-${m}-${d}T${h}:${min}:${s}${sign}${offH}:${offM}`;
+}
+
+function loadCalendarMap(repoRoot) {
+  const mapPath = repoPath(repoRoot, 'data', 'private', 'calendar_map.json');
+  if (!fs.existsSync(mapPath)) {
+    return { domains: {}, keywords: {}, attendees: {} };
+  }
+  try {
+    return JSON.parse(readText(mapPath));
+  } catch {
+    return { domains: {}, keywords: {}, attendees: {} };
+  }
+}
+
+function listAccountSlugs(repoRoot) {
+  const accountsDir = repoPath(repoRoot, 'accounts');
+  if (!fs.existsSync(accountsDir)) return [];
+  return fs
+    .readdirSync(accountsDir, { withFileTypes: true })
+    .filter((dir) => dir.isDirectory() && !dir.name.startsWith('.'))
+    .map((dir) => dir.name)
+    .sort();
+}
+
+function createPrompt() {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return {
+    ask(question) {
+      return new Promise((resolve) => rl.question(question, resolve));
+    },
+    close() {
+      rl.close();
+    },
+  };
+}
+
+async function promptSelect(promptText, options, prompt) {
+  console.log(promptText);
+  options.forEach((opt, idx) => {
+    console.log(`  ${idx + 1}) ${opt}`);
+  });
+  while (true) {
+    const choice = (await prompt.ask('Select number (or blank to skip): ')).trim();
+    if (!choice) return null;
+    const num = Number(choice);
+    if (Number.isInteger(num) && num >= 1 && num <= options.length) {
+      return options[num - 1];
+    }
+  }
+}
+
+async function promptSelectEvents(events, prompt) {
+  console.log('\nUpcoming events:');
+  events.forEach((ev, idx) => {
+    const when = formatEventTime(ev);
+    const summary = ev.summary || '(no title)';
+    const display = when ? formatDateTimeLocal(when) : '(no time)';
+    console.log(`  ${idx + 1}) ${display} - ${summary}`);
+  });
+
+  const raw = (await prompt.ask('Select events (e.g., 1,3-5 or a for all): ')).trim().toLowerCase();
+  if (!raw) return [];
+  if (raw === 'a' || raw === 'all' || raw === '*') {
+    return events.map((_, idx) => idx);
+  }
+
+  const selected = new Set();
+  for (const partRaw of raw.split(',')) {
+    const part = partRaw.trim();
+    if (!part) continue;
+    if (part.includes('-')) {
+      const [a, b] = part.split('-', 2).map((v) => Number(v));
+      if (Number.isInteger(a) && Number.isInteger(b)) {
+        for (let i = a; i <= b; i += 1) {
+          if (i >= 1 && i <= events.length) selected.add(i - 1);
+        }
+      }
+    } else {
+      const idx = Number(part);
+      if (Number.isInteger(idx) && idx >= 1 && idx <= events.length) {
+        selected.add(idx - 1);
+      }
+    }
+  }
+
+  return Array.from(selected.values()).sort((a, b) => a - b);
+}
+
+function formatEventTime(ev) {
+  const start = ev.start || {};
+  if (start.dateTime) {
+    return new Date(start.dateTime);
+  }
+  if (start.date) {
+    return new Date(start.date);
+  }
+  return null;
+}
+
+function pickAccountForEvent(ev, slugs, cmap, prompt) {
+  const attendees = (ev.attendees || []).map((a) => a.email).filter(Boolean);
+  const summary = ev.summary || '';
+
+  for (const email of attendees) {
+    if (cmap.attendees && cmap.attendees[email]) {
+      return Promise.resolve(cmap.attendees[email]);
+    }
+  }
+
+  for (const email of attendees) {
+    const domain = email.split('@').pop().toLowerCase();
+    if (cmap.domains && cmap.domains[domain]) {
+      return Promise.resolve(cmap.domains[domain]);
+    }
+  }
+
+  for (const [keyword, slug] of Object.entries(cmap.keywords || {})) {
+    if (summary.toLowerCase().includes(keyword.toLowerCase())) {
+      return Promise.resolve(slug);
+    }
+  }
+
+  if (slugs.length) {
+    return promptSelect(`Pick account for event: ${summary}`, slugs, prompt);
+  }
+
+  return Promise.resolve(null);
+}
+
+function readAccountName(repoRoot, slug) {
+  const accountPath = repoPath(repoRoot, 'accounts', slug, 'account.md');
+  if (!fs.existsSync(accountPath)) return null;
+  const lines = readText(accountPath).split(/\r?\n/);
+  for (const line of lines) {
+    if (line.startsWith('account:')) {
+      return line.split(':', 2)[1].trim().replace(/^\"|\"$/g, '');
+    }
+  }
+  return null;
+}
+
+function ensureNextCall(repoRoot, slug, eventDate, accountName) {
+  const acctDir = repoPath(repoRoot, 'accounts', slug);
+  if (!fs.existsSync(acctDir)) {
+    console.log(`Account folder not found: ${acctDir}`);
+    return null;
+  }
+
+  const nextCallPath = repoPath(acctDir, 'next_call.md');
+  if (!fs.existsSync(nextCallPath)) {
+    const templatePath = repoPath(repoRoot, 'templates', 'next_call.md');
+    if (!fs.existsSync(templatePath)) {
+      console.log('Missing template: templates/next_call.md');
+      return null;
+    }
+    let content = readText(templatePath);
+    content = content.replace(/^date:.*$/m, `date: ${eventDate}`);
+    if (accountName) {
+      content = content.replace(/^account: \"\"/m, `account: \"${accountName}\"`);
+    }
+    writeText(nextCallPath, content);
+  }
+
+  return nextCallPath;
+}
+
+function updateNextCall(nextCallPath, ev) {
+  const content = readText(nextCallPath).split(/\r?\n/);
+  const dt = formatEventTime(ev);
+  const summary = ev.summary || '(no title)';
+  const when = dt ? formatDateTimeLocal(dt) : '(no time)';
+  const agendaLine = `- ${when} - ${summary}`;
+
+  if (content.includes(agendaLine)) {
+    return;
+  }
+
+  const out = [];
+  let inAgenda = false;
+  let inserted = false;
+
+  for (const line of content) {
+    out.push(line);
+    if (line.trim().toLowerCase() === '## agenda') {
+      inAgenda = true;
+      continue;
+    }
+    if (inAgenda) {
+      if (line.startsWith('## ')) {
+        if (!inserted) {
+          out.splice(out.length - 1, 0, agendaLine);
+          inserted = true;
+        }
+        inAgenda = false;
+      } else if (line.trim() === '' && !inserted) {
+        out.push(agendaLine);
+        inserted = true;
+      }
+    }
+  }
+
+  if (inAgenda && !inserted) {
+    out.push(agendaLine);
+  }
+
+  writeText(nextCallPath, out.join('\n') + '\n');
+}
+
+async function promptContext(prompt) {
+  console.log('Add context for the agent? (optional)');
+  console.log('Enter one or more lines, finish with an empty line:');
+  const lines = [];
+  while (true) {
+    const line = await prompt.ask('');
+    if (line === '') break;
+    lines.push(line);
+  }
+  return lines.join('\n').trim();
+}
+
+async function maybeRunAgent(repoRoot, nextCallPath, prompt) {
+  console.log('\nCurrent next_call.md:');
+  console.log(readText(nextCallPath));
+
+  const resp = (await prompt.ask('Run agent to refine agenda/todos? [y/N]: ')).trim().toLowerCase();
+  if (resp !== 'y') return;
+
+  const context = await promptContext(prompt);
+  const result = runAgent(repoRoot, 'prompts/plan_agenda.md', nextCallPath, context);
+  if (result === 2) {
+    console.log('Agent not configured (AGENT=manual). Update claudoist.config to enable.');
+  }
+}
+
+function openBrowser(url) {
+  const platform = process.platform;
+  if (platform === 'darwin') {
+    spawnSync('open', [url], { stdio: 'ignore' });
+  } else if (platform === 'win32') {
+    spawnSync('cmd', ['/c', 'start', '', url], { stdio: 'ignore' });
+  } else {
+    spawnSync('xdg-open', [url], { stdio: 'ignore' });
+  }
+}
+
+function loadClientConfig(repoRoot) {
+  const clientPath = repoPath(repoRoot, 'data', 'private', 'google-oauth.json');
+  if (!fs.existsSync(clientPath)) {
+    throw new Error(`Missing OAuth client file: ${clientPath}`);
+  }
+  const raw = JSON.parse(readText(clientPath));
+  const config = raw.installed || raw.web;
+  if (!config) {
+    throw new Error('OAuth client JSON missing installed/web section.');
+  }
+  return config;
+}
+
+function saveToken(repoRoot, tokens) {
+  const tokenPath = repoPath(repoRoot, 'data', 'private', 'google-token.json');
+  fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+  writeText(tokenPath, JSON.stringify(tokens, null, 2) + '\n');
+}
+
+function loadToken(repoRoot) {
+  const tokenPath = repoPath(repoRoot, 'data', 'private', 'google-token.json');
+  if (!fs.existsSync(tokenPath)) return null;
+  try {
+    return JSON.parse(readText(tokenPath));
+  } catch {
+    return null;
+  }
+}
+
+async function authorizeInteractive(repoRoot, clientConfig) {
+  return new Promise((resolve, reject) => {
+    let oauth2Client;
+    const server = http.createServer(async (req, res) => {
+      try {
+        const requestUrl = new URL(req.url, `http://localhost`);
+        const code = requestUrl.searchParams.get('code');
+        if (!code) {
+          res.statusCode = 400;
+          res.end('Missing code.');
+          return;
+        }
+        const { tokens } = await oauth2Client.getToken(code);
+        oauth2Client.setCredentials(tokens);
+        saveToken(repoRoot, tokens);
+        res.end('Authentication complete. You can close this tab.');
+        server.close();
+        resolve(oauth2Client);
+      } catch (err) {
+        server.close();
+        reject(err);
+      }
+    });
+
+    server.listen(0, () => {
+      const port = server.address().port;
+      const redirectUri = `http://localhost:${port}/oauth2callback`;
+      const google = getGoogleApi();
+      oauth2Client = new google.auth.OAuth2(clientConfig.client_id, clientConfig.client_secret, redirectUri);
+
+      const authUrl = oauth2Client.generateAuthUrl({
+        access_type: 'offline',
+        scope: CALENDAR_SCOPES,
+        prompt: 'consent',
+      });
+
+      console.log('Authorize this app by visiting this url:\n' + authUrl);
+      openBrowser(authUrl);
+    });
+  });
+}
+
+async function loadCredentials(repoRoot) {
+  const clientConfig = loadClientConfig(repoRoot);
+  const token = loadToken(repoRoot);
+
+  if (token) {
+    const google = getGoogleApi();
+    const oauth2Client = new google.auth.OAuth2(
+      clientConfig.client_id,
+      clientConfig.client_secret,
+      clientConfig.redirect_uris ? clientConfig.redirect_uris[0] : undefined
+    );
+
+    oauth2Client.setCredentials(token);
+    oauth2Client.on('tokens', (tokens) => {
+      const merged = { ...oauth2Client.credentials, ...tokens };
+      saveToken(repoRoot, merged);
+    });
+
+    return oauth2Client;
+  }
+
+  return authorizeInteractive(repoRoot, clientConfig);
+}
+
+async function fetchEvents(repoRoot, start, end) {
+  const auth = await loadCredentials(repoRoot);
+  const google = getGoogleApi();
+  const calendar = google.calendar({ version: 'v3', auth });
+
+  const startDt = new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0);
+  const endDt = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59);
+
+  const res = await calendar.events.list({
+    calendarId: 'primary',
+    timeMin: formatRfc3339(startDt),
+    timeMax: formatRfc3339(endDt),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  return res.data.items || [];
+}
+
+async function runPlanCalls(repoRoot, args) {
+  let authOnly = false;
+  let daysArg = null;
+  const filtered = [];
+
+  for (const arg of args) {
+    if (arg === '--auth-only') {
+      authOnly = true;
+    } else {
+      filtered.push(arg);
+    }
+  }
+
+  if (filtered.length) {
+    const parsed = Number(filtered[0]);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      die('Invalid days argument; expected a positive integer');
+    }
+    daysArg = parsed;
+  }
+
+  if (authOnly) {
+    await loadCredentials(repoRoot);
+    console.log('Google Calendar auth complete.');
+    return;
+  }
+
+  const { start, end } = dateRange(daysArg);
+  let events;
+  try {
+    events = await fetchEvents(repoRoot, start, end);
+  } catch (err) {
+    console.error('Failed to fetch calendar events:', err.message || err);
+    process.exit(1);
+  }
+
+  if (!events.length) {
+    console.log('No events found in date range.');
+    return;
+  }
+
+  const prompt = createPrompt();
+  const selected = await promptSelectEvents(events, prompt);
+  if (!selected.length) {
+    console.log('No events selected.');
+    prompt.close();
+    return;
+  }
+
+  const slugs = listAccountSlugs(repoRoot);
+  const cmap = loadCalendarMap(repoRoot);
+  const updatedFiles = [];
+
+  for (const idx of selected) {
+    const ev = events[idx];
+    const dt = formatEventTime(ev);
+    const evDate = dt ? formatDateLocal(dt) : formatDateLocal(new Date());
+    const summary = ev.summary || '(no title)';
+
+    const slug = await pickAccountForEvent(ev, slugs, cmap, prompt);
+    if (!slug) {
+      console.log(`Skipping (no account selected): ${summary}`);
+      continue;
+    }
+
+    const accountName = readAccountName(repoRoot, slug);
+    const nextCallPath = ensureNextCall(repoRoot, slug, evDate, accountName);
+    if (!nextCallPath) continue;
+
+    updateNextCall(nextCallPath, ev);
+    updatedFiles.push(nextCallPath);
+
+    await maybeRunAgent(repoRoot, nextCallPath, prompt);
+  }
+
+  prompt.close();
+
+  if (updatedFiles.length) {
+    console.log('\nUpdated next_call files:');
+    for (const file of updatedFiles) {
+      console.log(`- ${file}`);
+    }
+    console.log('\nOptional: run your agent with prompts/plan_agenda.md to refine agendas.');
+  }
+}
+
+async function runGoogleAuthenticate(repoRoot) {
+  await runPlanCalls(repoRoot, ['--auth-only']);
+}
+
+function extractTitleFromTodos(lines, fallback) {
+  if (!lines.length) return fallback;
+  const first = lines[0].trim();
+  if (first.startsWith('#')) {
+    return first.replace(/^#\s*Todos\s*-\s*/i, '').trim() || fallback;
+  }
+  return fallback;
+}
+
+function collectDoneItems(lines, acctTitle, out) {
+  let inDone = false;
+  for (const line of lines) {
+    if (/^##\s+Done\b/i.test(line) || /^##\s+Archive\s*\(Done\)/i.test(line)) {
+      inDone = true;
+      continue;
+    }
+    if (/^##\s+/.test(line)) {
+      inDone = false;
+    }
+    if (inDone && /^- \[x\]/.test(line)) {
+      const cleaned = line.replace(/^- \[x\]\s*/, '');
+      out.push(`- [x] ${acctTitle} - ${cleaned}`);
+    }
+  }
+}
+
+function renderTodosBody(lines) {
+  return lines.slice(1).map((line) => line.replace(/^##\s+/, '#### '));
+}
+
+function buildDashboard(repoRoot, args) {
+  const outFile = args[0] ? path.resolve(args[0]) : repoPath(repoRoot, 'TODOS.md');
+
+  const accountsDir = repoPath(repoRoot, 'accounts');
+  const doneItems = [];
+  const output = [];
+
+  output.push('# Global TODOs', '', '## Accounts');
+
+  if (fs.existsSync(accountsDir)) {
+    const dirs = fs.readdirSync(accountsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+    for (const dir of dirs) {
+      const todosPath = repoPath(accountsDir, dir.name, 'todos.md');
+      if (!fs.existsSync(todosPath)) continue;
+      const lines = readText(todosPath).split(/\r?\n/);
+      const title = extractTitleFromTodos(lines, dir.name);
+
+      output.push('', `### ${title}`, '');
+      output.push(...renderTodosBody(lines));
+
+      collectDoneItems(lines, title, doneItems);
+    }
+  }
+
+  const internalTodos = repoPath(repoRoot, 'internal', 'todos.md');
+  if (fs.existsSync(internalTodos)) {
+    const lines = readText(internalTodos).split(/\r?\n/);
+    output.push('', '## Internal', '');
+    output.push(...renderTodosBody(lines));
+    collectDoneItems(lines, 'Internal', doneItems);
+  }
+
+  const onboardingTodos = repoPath(repoRoot, 'internal', 'onboarding', 'todos.md');
+  if (fs.existsSync(onboardingTodos)) {
+    const lines = readText(onboardingTodos).split(/\r?\n/);
+    output.push('', '## Internal - Onboarding', '');
+    output.push(...renderTodosBody(lines));
+    collectDoneItems(lines, 'Internal - Onboarding', doneItems);
+  }
+
+  output.push('', '## Archive (Done)', '');
+  if (doneItems.length) {
+    output.push(...doneItems);
+  } else {
+    output.push('- [x] YYYY-MM-DD - ...');
+  }
+
+  writeText(outFile, output.join('\n') + '\n');
+  console.log(`Wrote ${outFile}`);
+}
+
+function watchTodos(repoRoot) {
+  const accountsDir = repoPath(repoRoot, 'accounts');
+  if (!fs.existsSync(accountsDir)) {
+    die('accounts/ directory not found.');
+  }
+
+  console.log('Watching accounts/*/todos.md for changes...');
+
+  let timer = null;
+  const trigger = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => buildDashboard(repoRoot, []), 200);
+  };
+
+  const watcher = fs.watch(accountsDir, { recursive: true }, (eventType, filename) => {
+    if (!filename) return;
+    if (filename.endsWith('todos.md')) {
+      trigger();
+    }
+  });
+
+  watcher.on('error', (err) => {
+    console.error('Watcher error:', err.message || err);
+  });
+}
+
+function copyIfMissing(src, dest, mode) {
+  if (fs.existsSync(dest)) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  if (mode) {
+    fs.chmodSync(dest, mode);
+  }
+  return true;
+}
+
+function copyDirIfMissing(srcDir, destDir) {
+  if (!fs.existsSync(srcDir)) return [];
+  const created = [];
+  const entries = fs.readdirSync(srcDir, { withFileTypes: true });
+  fs.mkdirSync(destDir, { recursive: true });
+  for (const entry of entries) {
+    const srcPath = path.join(srcDir, entry.name);
+    const destPath = path.join(destDir, entry.name);
+    if (entry.isDirectory()) {
+      created.push(...copyDirIfMissing(srcPath, destPath));
+    } else if (entry.isFile()) {
+      if (!fs.existsSync(destPath)) {
+        const mode = fs.statSync(srcPath).mode;
+        copyIfMissing(srcPath, destPath, mode);
+        created.push(destPath);
+      }
+    }
+  }
+  return created;
+}
+
+function writeFileIfMissing(filePath, content) {
+  if (fs.existsSync(filePath)) return false;
+  writeText(filePath, content);
+  return true;
+}
+
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function initRepo(args) {
+  const target = args[0] ? path.resolve(args[0]) : process.cwd();
+  const created = [];
+
+  ensureDir(target);
+
+  const filesToCopy = [
+    '.gitignore',
+    '.gitattributes',
+    'README.md',
+    'CHANGELOG.md',
+    'AGENTS.md',
+    'TODOS.example.md',
+    'claudoist.config',
+    'claudoist',
+    'package.json',
+    path.join('data', 'README.md'),
+  ];
+
+  for (const file of filesToCopy) {
+    const src = path.join(SCRIPT_ROOT, file);
+    const dest = path.join(target, file);
+    if (fs.existsSync(src)) {
+      if (copyIfMissing(src, dest, fs.statSync(src).mode)) {
+        created.push(dest);
+      }
+    }
+  }
+
+  const dirCopies = ['templates', 'prompts', 'schemas', 'scripts', 'playbooks'];
+  for (const dir of dirCopies) {
+    const srcDir = path.join(SCRIPT_ROOT, dir);
+    const destDir = path.join(target, dir);
+    created.push(...copyDirIfMissing(srcDir, destDir));
+  }
+
+  const scaffoldDirs = [
+    'accounts',
+    'inbox',
+    'weekly',
+    'metrics',
+    'internal',
+    path.join('data', 'public'),
+    path.join('data', 'private'),
+  ];
+
+  for (const dir of scaffoldDirs) {
+    const destDir = path.join(target, dir);
+    ensureDir(destDir);
+    const keepPath = path.join(destDir, '.gitkeep');
+    if (writeFileIfMissing(keepPath, '')) {
+      created.push(keepPath);
+    }
+  }
+
+  const readmes = {
+    accounts: '# Accounts\n\nPer-account notes and todos live here.\n',
+    inbox: '# Inbox\n\nQuick capture area for raw notes.\n',
+    weekly: '# Weekly\n\nWeekly summaries go here.\n',
+    metrics: '# Metrics\n\nTracking metrics snapshots.\n',
+    internal: '# Internal\n\nNon-customer work (product, ops, marketing, recruiting).\n',
+    [path.join('data', 'public')]: '# Data (Public)\n\nShareable data only.\n',
+    [path.join('data', 'private')]: '# Data (Private)\n\nSensitive data; keep out of git.\n',
+  };
+
+  for (const [dir, content] of Object.entries(readmes)) {
+    const readmePath = path.join(target, dir, 'README.md');
+    if (writeFileIfMissing(readmePath, content)) {
+      created.push(readmePath);
+    }
+  }
+
+  console.log(`Initialized claudoist repo at ${target}.`);
+  if (created.length) {
+    console.log('Created:');
+    for (const item of created) {
+      console.log(` - ${path.relative(target, item)}`);
+    }
+  } else {
+    console.log('No changes needed. To scaffold a new repo elsewhere, pass a path (e.g. /tmp/claudoist).');
+  }
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+  const cmd = args.shift();
+
+  if (!cmd || cmd === 'help' || cmd === '-h' || cmd === '--help') {
+    usage();
+    return;
+  }
+
+  if (cmd === '--version' || cmd === 'version') {
+    console.log(readPackageVersion());
+    return;
+  }
+
+  if (cmd === 'init') {
+    initRepo(args);
+    return;
+  }
+
+  const repoRoot = ensureRepoRoot();
+
+  switch (cmd) {
+    case 'new-account':
+      newAccount(repoRoot, args);
+      break;
+    case 'new-note':
+      newNote(repoRoot, args);
+      break;
+    case 'ingest-call':
+      ingestCall(repoRoot, args);
+      break;
+    case 'process-next-calls':
+      processNextCalls(repoRoot, args);
+      break;
+    case 'plan-calls':
+      await runPlanCalls(repoRoot, args);
+      break;
+    case 'google-authenticate':
+      await runGoogleAuthenticate(repoRoot);
+      break;
+    case 'build-dashboard':
+      buildDashboard(repoRoot, args);
+      break;
+    case 'watch-todos':
+      watchTodos(repoRoot);
+      break;
+    default:
+      console.error(`Unknown command: ${cmd}`);
+      usage();
+      process.exit(1);
+  }
+}
+
+main().catch((err) => {
+  console.error(err && err.message ? err.message : err);
+  process.exit(1);
+});

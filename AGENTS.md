@@ -16,6 +16,7 @@ This repo is agent-agnostic. Use prompts from the `prompts/` folder.
 - Notes are append-only; `account.md` is curated truth.
 - Keep dates in `YYYY-MM-DD`.
 - Use `scripts/build_todos_dashboard.sh` after per-account TODO updates.
+- Use Beads (`bd`) for planning and work tracking; record work in issues instead of ad-hoc notes.
 
 ## Safety rules
 

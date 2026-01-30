@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-scripts/bootstrap_plan_calls.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-VENV_PYTHON=".venv/bin/python"
-if [ -x "$VENV_PYTHON" ]; then
-  "$VENV_PYTHON" scripts/plan_calls.py --auth-only
-else
-  python3 scripts/plan_calls.py --auth-only
-fi
+"$REPO_ROOT/claudoist" google-authenticate

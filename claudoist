@@ -8,11 +8,19 @@ const readline = require('readline');
 const http = require('http');
 const { spawnSync } = require('child_process');
 
-const SCRIPT_ROOT = __dirname;
+let scriptRoot = __dirname;
+
+function getScriptRoot() {
+  return scriptRoot;
+}
+
+function setScriptRootForTests(root) {
+  scriptRoot = root;
+}
 
 function readPackageVersion() {
   try {
-    const pkgPath = path.join(SCRIPT_ROOT, 'package.json');
+    const pkgPath = path.join(getScriptRoot(), 'package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     return pkg.version || '0.0.0';
   } catch {
@@ -135,7 +143,8 @@ function runAgent(repoRoot, promptRel, inputFile, context) {
   }
 
   const config = loadConfig(repoRoot);
-  const agent = config.AGENT || process.env.AGENT || 'manual';
+  const rawAgent = config.AGENT || process.env.AGENT || 'manual';
+  const agent = String(rawAgent).trim();
 
   if (!agent || agent === 'manual') {
     return 2;
@@ -307,8 +316,12 @@ function processNextCalls(repoRoot, args) {
 
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
 let googleApi = null;
+let googleApiOverride = null;
 
 function getGoogleApi() {
+  if (googleApiOverride) {
+    return googleApiOverride;
+  }
   if (!googleApi) {
     try {
       // Lazy-load so non-calendar commands work without node_modules.
@@ -318,6 +331,13 @@ function getGoogleApi() {
     }
   }
   return googleApi;
+}
+
+function setGoogleApiForTests(google) {
+  googleApiOverride = google || null;
+  if (!google) {
+    googleApi = null;
+  }
 }
 
 function weekdayIndex(date) {
@@ -1002,7 +1022,7 @@ function initRepo(args) {
   ];
 
   for (const file of filesToCopy) {
-    const src = path.join(SCRIPT_ROOT, file);
+    const src = path.join(getScriptRoot(), file);
     const dest = path.join(target, file);
     if (fs.existsSync(src)) {
       if (copyIfMissing(src, dest, fs.statSync(src).mode)) {
@@ -1013,7 +1033,7 @@ function initRepo(args) {
 
   const dirCopies = ['templates', 'prompts', 'schemas', 'scripts', 'playbooks'];
   for (const dir of dirCopies) {
-    const srcDir = path.join(SCRIPT_ROOT, dir);
+    const srcDir = path.join(getScriptRoot(), dir);
     const destDir = path.join(target, dir);
     created.push(...copyDirIfMissing(srcDir, destDir));
   }
@@ -1118,7 +1138,63 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err && err.message ? err.message : err);
-  process.exit(1);
-});
+module.exports = {
+  readPackageVersion,
+  usage,
+  die,
+  getScriptRoot,
+  setScriptRootForTests,
+  setGoogleApiForTests,
+  findRepoRoot,
+  repoPath,
+  ensureRepoRoot,
+  readText,
+  writeText,
+  formatDateLocal,
+  loadConfig,
+  runAgent,
+  newAccount,
+  newNote,
+  ingestCall,
+  listNextCallFiles,
+  processNextCalls,
+  formatDateTimeLocal,
+  formatRfc3339,
+  loadCalendarMap,
+  listAccountSlugs,
+  promptSelect,
+  promptSelectEvents,
+  formatEventTime,
+  pickAccountForEvent,
+  readAccountName,
+  ensureNextCall,
+  updateNextCall,
+  promptContext,
+  maybeRunAgent,
+  openBrowser,
+  loadClientConfig,
+  saveToken,
+  loadToken,
+  loadCredentials,
+  fetchEvents,
+  runPlanCalls,
+  runGoogleAuthenticate,
+  extractTitleFromTodos,
+  collectDoneItems,
+  renderTodosBody,
+  buildDashboard,
+  watchTodos,
+  copyIfMissing,
+  copyDirIfMissing,
+  writeFileIfMissing,
+  ensureDir,
+  initRepo,
+  main,
+};
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err && err.message ? err.message : err);
+    process.exit(1);
+  });
+}

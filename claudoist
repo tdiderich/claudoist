@@ -441,6 +441,35 @@ function createPrompt() {
   };
 }
 
+function parseSelection(input, max) {
+  const raw = String(input || '').trim().toLowerCase();
+  if (!raw) return [];
+  if (raw === 'a' || raw === 'all' || raw === '*') {
+    return Array.from({ length: max }, (_, idx) => idx);
+  }
+
+  const selected = new Set();
+  for (const partRaw of raw.split(',')) {
+    const part = partRaw.trim();
+    if (!part) continue;
+    if (part.includes('-')) {
+      const [a, b] = part.split('-', 2).map((v) => Number(v));
+      if (Number.isInteger(a) && Number.isInteger(b)) {
+        for (let i = a; i <= b; i += 1) {
+          if (i >= 1 && i <= max) selected.add(i - 1);
+        }
+      }
+    } else {
+      const idx = Number(part);
+      if (Number.isInteger(idx) && idx >= 1 && idx <= max) {
+        selected.add(idx - 1);
+      }
+    }
+  }
+
+  return Array.from(selected.values()).sort((a, b) => a - b);
+}
+
 async function promptSelect(promptText, options, prompt) {
   console.log(promptText);
   options.forEach((opt, idx) => {
@@ -465,32 +494,8 @@ async function promptSelectEvents(events, prompt) {
     console.log(`  ${idx + 1}) ${display} - ${summary}`);
   });
 
-  const raw = (await prompt.ask('Select events (e.g., 1,3-5 or a for all): ')).trim().toLowerCase();
-  if (!raw) return [];
-  if (raw === 'a' || raw === 'all' || raw === '*') {
-    return events.map((_, idx) => idx);
-  }
-
-  const selected = new Set();
-  for (const partRaw of raw.split(',')) {
-    const part = partRaw.trim();
-    if (!part) continue;
-    if (part.includes('-')) {
-      const [a, b] = part.split('-', 2).map((v) => Number(v));
-      if (Number.isInteger(a) && Number.isInteger(b)) {
-        for (let i = a; i <= b; i += 1) {
-          if (i >= 1 && i <= events.length) selected.add(i - 1);
-        }
-      }
-    } else {
-      const idx = Number(part);
-      if (Number.isInteger(idx) && idx >= 1 && idx <= events.length) {
-        selected.add(idx - 1);
-      }
-    }
-  }
-
-  return Array.from(selected.values()).sort((a, b) => a - b);
+  const raw = await prompt.ask('Select events (e.g., 1,3-5 or a for all): ');
+  return parseSelection(raw, events.length);
 }
 
 function formatEventTime(ev) {
@@ -1002,7 +1007,7 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function initRepo(args) {
+async function initRepo(args) {
   const target = args[0] ? path.resolve(args[0]) : process.cwd();
   const created = [];
 
@@ -1051,10 +1056,6 @@ function initRepo(args) {
   for (const dir of scaffoldDirs) {
     const destDir = path.join(target, dir);
     ensureDir(destDir);
-    const keepPath = path.join(destDir, '.gitkeep');
-    if (writeFileIfMissing(keepPath, '')) {
-      created.push(keepPath);
-    }
   }
 
   const readmes = {
@@ -1071,6 +1072,34 @@ function initRepo(args) {
     const readmePath = path.join(target, dir, 'README.md');
     if (writeFileIfMissing(readmePath, content)) {
       created.push(readmePath);
+    }
+  }
+
+  const publicDataDir = path.join(getScriptRoot(), 'data', 'public');
+  if (process.stdin.isTTY && fs.existsSync(publicDataDir)) {
+    const candidates = fs
+      .readdirSync(publicDataDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => name !== 'README.md');
+
+    if (candidates.length) {
+      console.log('\nOptional: add data/public files to this repo?');
+      candidates.forEach((name, idx) => {
+        console.log(`  ${idx + 1}) ${name}`);
+      });
+      const prompt = createPrompt();
+      const answer = await prompt.ask('Select files (e.g., 1,3-5 or a for all, blank to skip): ');
+      prompt.close();
+      const selected = parseSelection(answer, candidates.length);
+      for (const idx of selected) {
+        const name = candidates[idx];
+        const src = path.join(publicDataDir, name);
+        const dest = path.join(target, 'data', 'public', name);
+        if (copyIfMissing(src, dest, fs.statSync(src).mode)) {
+          created.push(dest);
+        }
+      }
     }
   }
 
@@ -1100,7 +1129,7 @@ async function main() {
   }
 
   if (cmd === 'init') {
-    initRepo(args);
+    await initRepo(args);
     return;
   }
 

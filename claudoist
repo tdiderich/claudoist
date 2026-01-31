@@ -1056,10 +1056,6 @@ async function initRepo(args) {
   for (const dir of scaffoldDirs) {
     const destDir = path.join(target, dir);
     ensureDir(destDir);
-    const keepPath = path.join(destDir, '.gitkeep');
-    if (writeFileIfMissing(keepPath, '')) {
-      created.push(keepPath);
-    }
   }
 
   const readmes = {
